@@ -1,0 +1,45 @@
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+export type CatalogProduct = {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  basePrice: string;
+  trackStock: boolean;
+  stockUnit: string;
+  minimumStock: string;
+  familyName: string;
+  taxName: string;
+};
+
+export type CatalogData = {
+  products: CatalogProduct[];
+  families: { id: string; name: string }[];
+  taxes: { id: string; name: string; rate: string; isDefault: boolean }[];
+};
+
+export async function getCatalogData(): Promise<CatalogData | null> {
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const [productsResult, familiesResult, taxesResult] = await Promise.all([
+    supabase.from("products").select("id, code, name, description, base_price, track_stock, stock_unit, minimum_stock, product_families(name), tax_rates(name)").is("archived_at", null).order("name"),
+    supabase.from("product_families").select("id, name").is("archived_at", null).order("name"),
+    supabase.from("tax_rates").select("id, name, rate, is_default").order("rate"),
+  ]);
+  if (productsResult.error || familiesResult.error || taxesResult.error) throw new Error("No se ha podido cargar el catálogo.");
+
+  return {
+    products: productsResult.data.map((product) => ({
+      id: product.id, code: product.code, name: product.name, description: product.description || "",
+      basePrice: Number(product.base_price).toFixed(2), trackStock: product.track_stock,
+      stockUnit: product.stock_unit, minimumStock: String(product.minimum_stock),
+      familyName: product.product_families?.[0]?.name || "Sin familia", taxName: product.tax_rates?.[0]?.name || "Sin IVA",
+    })),
+    families: familiesResult.data,
+    taxes: taxesResult.data.map((tax) => ({ id: tax.id, name: tax.name, rate: String(tax.rate), isDefault: tax.is_default })),
+  };
+}

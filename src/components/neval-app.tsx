@@ -23,8 +23,10 @@ import {
 import { useMemo, useState, type ComponentType } from "react";
 import { Button } from "@/components/ui/button";
 import { archiveCustomer, createCustomer, updateCustomer } from "@/app/actions/customers";
+import { createProduct } from "@/app/actions/catalog";
 import type { CustomerSummary } from "@/features/customers/customer-repository";
 import type { DashboardData } from "@/features/dashboard/dashboard-repository";
+import type { CatalogData } from "@/features/catalog/catalog-repository";
 
 type Section = "Dashboard" | "Clientes" | "Presupuestos" | "Pedidos" | "Compras" | "Almacén" | "Informes" | "Configuración";
 type Client = CustomerSummary;
@@ -72,12 +74,13 @@ function Metric({ label, value, note, icon: Icon, accent }: { label: string; val
   );
 }
 
-export function NevalApp({ initialCustomers, dashboard }: { initialCustomers: Client[]; dashboard: DashboardData | null }) {
+export function NevalApp({ initialCustomers, dashboard, catalog }: { initialCustomers: Client[]; dashboard: DashboardData | null; catalog: CatalogData | null }) {
   const [section, setSection] = useState<Section>("Dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [showNewClient, setShowNewClient] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [showNewProduct, setShowNewProduct] = useState(false);
   const [clients, setClients] = useState(initialCustomers);
   const [notice, setNotice] = useState<string | null>(null);
   const copy = titleCopy[section];
@@ -137,15 +140,27 @@ export function NevalApp({ initialCustomers, dashboard }: { initialCustomers: Cl
     <section className="min-w-0 flex-1 lg:ms-72">
       <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-line bg-surface/95 px-5 backdrop-blur lg:px-8">
         <div className="flex items-center gap-3"><button onClick={() => setMobileOpen(true)} className="rounded-md p-2 hover:bg-surface-hover lg:hidden" aria-label="Abrir navegación"><Menu className="size-5" /></button><div><p className="text-xs text-muted">{copy.eyebrow}</p><h1 className="font-semibold">{copy.title}</h1></div></div>
-        <div className="flex items-center gap-2"><button className="rounded-lg border border-line p-2.5 text-muted hover:bg-surface-hover" aria-label="Notificaciones"><Bell className="size-4" /></button><Button onClick={() => section === "Clientes" ? setShowNewClient(true) : setNotice("Esta acción estará disponible desde el módulo correspondiente.")} className="h-10 gap-2 bg-accent px-3.5 font-bold text-accent-foreground hover:bg-accent/90"><Plus className="size-4" />{copy.action}</Button></div>
+        <div className="flex items-center gap-2"><button className="rounded-lg border border-line p-2.5 text-muted hover:bg-surface-hover" aria-label="Notificaciones"><Bell className="size-4" /></button><Button onClick={() => section === "Clientes" ? setShowNewClient(true) : section === "Configuración" ? setShowNewProduct(true) : setNotice("Esta acción estará disponible desde el módulo correspondiente.")} className="h-10 gap-2 bg-accent px-3.5 font-bold text-accent-foreground hover:bg-accent/90"><Plus className="size-4" />{section === "Configuración" ? "Nuevo producto" : copy.action}</Button></div>
       </header>
       <div className="mx-auto max-w-[1550px] p-5 lg:p-8">
         {notice && <div className="mb-5 flex items-center justify-between rounded-lg border border-[#4b6e40] bg-[#1c2e19] px-4 py-3 text-sm text-[#d6f9c7]"><span>{notice}</span><button onClick={() => setNotice(null)} aria-label="Cerrar aviso"><X className="size-4" /></button></div>}
-        {section === "Dashboard" ? <Dashboard data={dashboard} setSection={setSection} /> : section === "Clientes" ? <ClientsView clients={visibleClients} query={query} setQuery={setQuery} onAdd={() => setShowNewClient(true)} onEdit={setEditingClient} onArchive={removeClient} /> : <ModuleView section={section} onAction={() => setNotice("Módulo en preparación.")} />}
+        {section === "Dashboard" ? <Dashboard data={dashboard} setSection={setSection} /> : section === "Clientes" ? <ClientsView clients={visibleClients} query={query} setQuery={setQuery} onAdd={() => setShowNewClient(true)} onEdit={setEditingClient} onArchive={removeClient} /> : section === "Configuración" ? <CatalogView catalog={catalog} onAdd={() => setShowNewProduct(true)} /> : <ModuleView section={section} onAction={() => setNotice("Módulo en preparación.")} />}
       </div>
     </section>
     {(showNewClient || editingClient) && <CustomerForm client={editingClient} action={async (formData) => { if (editingClient) await saveClient(formData); else await addClient(formData); }} onClose={() => { setShowNewClient(false); setEditingClient(null); }} />}
+    {showNewProduct && <ProductForm catalog={catalog} onClose={() => setShowNewProduct(false)} onNotice={setNotice} />}
   </main>;
+}
+
+function CatalogView({ catalog, onAdd }: { catalog: CatalogData | null; onAdd: () => void }) {
+  const products = catalog?.products ?? [];
+  return <div className="space-y-6"><section className="flex items-end justify-between gap-4"><div><h2 className="text-2xl font-semibold tracking-tight">Catálogo de productos</h2><p className="mt-1 text-sm text-muted">Productos, familias, tarifas e impuestos de la empresa.</p></div><button onClick={onAdd} className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-accent-foreground"><Plus className="size-4" />Nuevo producto</button></section><article className="overflow-hidden rounded-xl border border-line bg-surface-raised"><div className="grid border-b border-line text-xs uppercase tracking-wider text-muted sm:grid-cols-4"><p className="p-4">{products.length} productos activos</p><p className="p-4">{catalog?.families.length ?? 0} familias</p><p className="p-4">{catalog?.taxes.length ?? 0} tipos de IVA</p><p className="p-4">Precios en EUR</p></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="border-b border-line text-xs uppercase tracking-wider text-muted"><tr><th className="px-5 py-4">Código</th><th className="px-5 py-4">Producto</th><th className="px-5 py-4">Familia</th><th className="px-5 py-4">IVA</th><th className="px-5 py-4 text-right">Precio base</th><th className="px-5 py-4">Stock</th></tr></thead><tbody>{products.map((product) => <tr key={product.id} className="border-b border-line/70 last:border-0"><td className="px-5 py-4 font-mono text-xs text-accent">{product.code}</td><td className="px-5 py-4"><p className="font-semibold">{product.name}</p>{product.description && <p className="mt-1 line-clamp-1 text-xs text-muted">{product.description}</p>}</td><td className="px-5 py-4 text-muted">{product.familyName}</td><td className="px-5 py-4 text-muted">{product.taxName}</td><td className="px-5 py-4 text-right font-semibold">{new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(Number(product.basePrice))}</td><td className="px-5 py-4 text-muted">{product.trackStock ? `Controlado · mín. ${product.minimumStock} ${product.stockUnit}` : "No inventariable"}</td></tr>)}</tbody></table>{products.length === 0 && <p className="p-12 text-center text-sm text-muted">Aún no hay productos. Crea el primero para usarlo en presupuestos y compras.</p>}</div></article></div>;
+}
+
+function ProductForm({ catalog, onClose, onNotice }: { catalog: CatalogData | null; onClose: () => void; onNotice: (message: string) => void }) {
+  const input = "mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2.5 outline-none focus:border-accent";
+  async function submit(formData: FormData) { const result = await createProduct(formData); onNotice(result.message); if (result.ok) onClose(); }
+  return <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/70 p-4"><form action={submit} className="mx-auto my-6 w-full max-w-2xl rounded-xl border border-line bg-surface-raised p-6 shadow-2xl"><div className="flex items-start justify-between"><div><p className="text-xs font-bold text-accent">CATÁLOGO</p><h2 className="mt-1 text-xl font-semibold">Nuevo producto</h2></div><button type="button" onClick={onClose} className="rounded-md p-1 text-muted hover:bg-surface-hover" aria-label="Cerrar"><X className="size-5" /></button></div><div className="mt-6 grid gap-4 sm:grid-cols-2"><label className="block text-sm">Código<input required name="code" autoFocus className={input} placeholder="TAB-001" /></label><label className="block text-sm">Nombre<input required name="name" className={input} placeholder="Tablero melamina blanco" /></label><label className="block text-sm">Familia<select name="familyId" className={input}><option value="">Sin familia</option>{catalog?.families.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}</select></label><label className="block text-sm">IVA<select name="taxRateId" defaultValue={catalog?.taxes.find((tax) => tax.isDefault)?.id ?? ""} className={input}><option value="">Sin asignar</option>{catalog?.taxes.map((tax) => <option key={tax.id} value={tax.id}>{tax.name} ({tax.rate}%)</option>)}</select></label><label className="block text-sm">Precio base (EUR)<input required name="basePrice" type="number" min="0" step="0.01" defaultValue="0" className={input} /></label><label className="block text-sm">Unidad<input name="stockUnit" defaultValue="ud" className={input} /></label><label className="flex items-center gap-3 rounded-lg border border-line bg-surface px-3 py-3 text-sm sm:col-span-2"><input name="trackStock" type="checkbox" className="size-4 accent-[#bdff7b]" />Controlar existencias de este producto</label><label className="block text-sm">Stock mínimo<input name="minimumStock" type="number" min="0" step="0.001" defaultValue="0" className={input} /></label><label className="block text-sm sm:col-span-2">Descripción<textarea name="description" className={`${input} min-h-24 resize-y`} /></label></div><div className="mt-7 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg px-4 py-2.5 text-sm text-muted hover:bg-surface-hover">Cancelar</button><button className="rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-accent-foreground">Guardar producto</button></div></form></div>;
 }
 
 function Dashboard({ data, setSection }: { data: DashboardData | null; setSection: (section: Section) => void }) {
