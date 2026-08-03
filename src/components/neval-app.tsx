@@ -21,12 +21,15 @@ import {
   X,
 } from "lucide-react";
 import { useMemo, useState, type ComponentType } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { archiveCustomer, createCustomer, updateCustomer } from "@/app/actions/customers";
 import { createProduct } from "@/app/actions/catalog";
+import { changeOrderStatus, convertQuote, createQuote, duplicateOrder } from "@/app/actions/commercial";
 import type { CustomerSummary } from "@/features/customers/customer-repository";
 import type { DashboardData } from "@/features/dashboard/dashboard-repository";
 import type { CatalogData } from "@/features/catalog/catalog-repository";
+import type { CommercialData, OrderSummary, QuoteSummary } from "@/features/commercial/commercial-repository";
 
 type Section = "Dashboard" | "Clientes" | "Presupuestos" | "Pedidos" | "Compras" | "Almacén" | "Informes" | "Configuración";
 type Client = CustomerSummary;
@@ -59,8 +62,14 @@ function Status({ value }: { value: string }) {
     ready: "bg-[#2c3b32] text-[#d9f6d5]",
     pending: "bg-[#4a3b1c] text-[#f8d870]",
     delivered: "bg-[#183f2a] text-[#a9f5bc]",
+    draft: "bg-surface-hover text-[#d9f6d5]",
+    sent: "bg-[#19354a] text-[#a8ddff]",
+    accepted: "bg-[#183f2a] text-[#a9f5bc]",
+    rejected: "bg-[#4a2424] text-[#ffb5b5]",
+    expired: "bg-surface-hover text-muted",
+    converted: "bg-[#253f26] text-[#bdff7b]",
   };
-  const labels: Record<string, string> = { in_manufacturing: "En fabricación", ready: "Preparado", pending: "Pendiente", delivered: "Entregado" };
+  const labels: Record<string, string> = { in_manufacturing: "En fabricación", ready: "Preparado", pending: "Pendiente", delivered: "Entregado", draft: "Borrador", sent: "Enviado", accepted: "Aceptado", rejected: "Rechazado", expired: "Caducado", converted: "Convertido" };
   return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${styles[value] ?? "bg-surface-hover text-muted"}`}>{labels[value] ?? value}</span>;
 }
 
@@ -74,13 +83,15 @@ function Metric({ label, value, note, icon: Icon, accent }: { label: string; val
   );
 }
 
-export function NevalApp({ initialCustomers, dashboard, catalog }: { initialCustomers: Client[]; dashboard: DashboardData | null; catalog: CatalogData | null }) {
+export function NevalApp({ initialCustomers, dashboard, catalog, commercial }: { initialCustomers: Client[]; dashboard: DashboardData | null; catalog: CatalogData | null; commercial: CommercialData | null }) {
+  const router = useRouter();
   const [section, setSection] = useState<Section>("Dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [showNewClient, setShowNewClient] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [showNewProduct, setShowNewProduct] = useState(false);
+  const [showNewQuote, setShowNewQuote] = useState(false);
   const [clients, setClients] = useState(initialCustomers);
   const [notice, setNotice] = useState<string | null>(null);
   const copy = titleCopy[section];
@@ -120,6 +131,12 @@ export function NevalApp({ initialCustomers, dashboard, catalog }: { initialCust
     setNotice("Cliente archivado. Su historial se conserva.");
   }
 
+  async function runCommercial(action: () => Promise<{ ok: boolean; message: string }>) {
+    const result = await action();
+    setNotice(result.message);
+    if (result.ok) router.refresh();
+  }
+
   const side = (
     <aside className="flex h-full w-72 shrink-0 flex-col border-e border-line bg-[#0d110c] p-4">
       <div className="flex items-center gap-3 px-2 py-3">
@@ -140,15 +157,16 @@ export function NevalApp({ initialCustomers, dashboard, catalog }: { initialCust
     <section className="min-w-0 flex-1 lg:ms-72">
       <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-line bg-surface/95 px-5 backdrop-blur lg:px-8">
         <div className="flex items-center gap-3"><button onClick={() => setMobileOpen(true)} className="rounded-md p-2 hover:bg-surface-hover lg:hidden" aria-label="Abrir navegación"><Menu className="size-5" /></button><div><p className="text-xs text-muted">{copy.eyebrow}</p><h1 className="font-semibold">{copy.title}</h1></div></div>
-        <div className="flex items-center gap-2"><button className="rounded-lg border border-line p-2.5 text-muted hover:bg-surface-hover" aria-label="Notificaciones"><Bell className="size-4" /></button><Button onClick={() => section === "Clientes" ? setShowNewClient(true) : section === "Configuración" ? setShowNewProduct(true) : setNotice("Esta acción estará disponible desde el módulo correspondiente.")} className="h-10 gap-2 bg-accent px-3.5 font-bold text-accent-foreground hover:bg-accent/90"><Plus className="size-4" />{section === "Configuración" ? "Nuevo producto" : copy.action}</Button></div>
+        <div className="flex items-center gap-2"><button className="rounded-lg border border-line p-2.5 text-muted hover:bg-surface-hover" aria-label="Notificaciones"><Bell className="size-4" /></button><Button onClick={() => section === "Clientes" ? setShowNewClient(true) : section === "Configuración" ? setShowNewProduct(true) : section === "Presupuestos" ? setShowNewQuote(true) : setNotice("Esta acción estará disponible desde el módulo correspondiente.")} className="h-10 gap-2 bg-accent px-3.5 font-bold text-accent-foreground hover:bg-accent/90"><Plus className="size-4" />{section === "Configuración" ? "Nuevo producto" : copy.action}</Button></div>
       </header>
       <div className="mx-auto max-w-[1550px] p-5 lg:p-8">
         {notice && <div className="mb-5 flex items-center justify-between rounded-lg border border-[#4b6e40] bg-[#1c2e19] px-4 py-3 text-sm text-[#d6f9c7]"><span>{notice}</span><button onClick={() => setNotice(null)} aria-label="Cerrar aviso"><X className="size-4" /></button></div>}
-        {section === "Dashboard" ? <Dashboard data={dashboard} setSection={setSection} /> : section === "Clientes" ? <ClientsView clients={visibleClients} query={query} setQuery={setQuery} onAdd={() => setShowNewClient(true)} onEdit={setEditingClient} onArchive={removeClient} /> : section === "Configuración" ? <CatalogView catalog={catalog} onAdd={() => setShowNewProduct(true)} /> : <ModuleView section={section} onAction={() => setNotice("Módulo en preparación.")} />}
+        {section === "Dashboard" ? <Dashboard data={dashboard} setSection={setSection} /> : section === "Clientes" ? <ClientsView clients={visibleClients} query={query} setQuery={setQuery} onAdd={() => setShowNewClient(true)} onEdit={setEditingClient} onArchive={removeClient} /> : section === "Configuración" ? <CatalogView catalog={catalog} onAdd={() => setShowNewProduct(true)} /> : section === "Presupuestos" ? <QuotesView quotes={commercial?.quotes ?? []} onConvert={(id) => runCommercial(() => convertQuote(id))} onAdd={() => setShowNewQuote(true)} /> : section === "Pedidos" ? <OrdersView orders={commercial?.orders ?? []} onStatus={(id, status) => runCommercial(() => changeOrderStatus(id, status))} onDuplicate={(id) => runCommercial(() => duplicateOrder(id))} /> : <ModuleView section={section} onAction={() => setNotice("Módulo en preparación.")} />}
       </div>
     </section>
     {(showNewClient || editingClient) && <CustomerForm client={editingClient} action={async (formData) => { if (editingClient) await saveClient(formData); else await addClient(formData); }} onClose={() => { setShowNewClient(false); setEditingClient(null); }} />}
     {showNewProduct && <ProductForm catalog={catalog} onClose={() => setShowNewProduct(false)} onNotice={setNotice} />}
+    {showNewQuote && <QuoteForm customers={clients} catalog={catalog} onClose={() => setShowNewQuote(false)} onNotice={(message) => { setNotice(message); router.refresh(); }} />}
   </main>;
 }
 
@@ -166,6 +184,20 @@ function ProductForm({ catalog, onClose, onNotice }: { catalog: CatalogData | nu
 function Dashboard({ data, setSection }: { data: DashboardData | null; setSection: (section: Section) => void }) {
   const dashboard = data ?? { pendingOrders: 0, readyOrders: 0, deliveredOrders: 0, orderValue: "0,00 €", lowStock: 0, recentOrders: [], alerts: [] };
   return <div className="space-y-7"><section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Pedidos pendientes" value={String(dashboard.pendingOrders)} note="Pendientes de gestionar" icon={Package} /><Metric label="Valor de pedidos" value={dashboard.orderValue} note="Valor comercial acumulado" icon={CircleDollarSign} accent /><Metric label="Preparados para entrega" value={String(dashboard.readyOrders)} note={`${dashboard.deliveredOrders} pedidos entregados`} icon={Archive} /><Metric label="Stock bajo mínimo" value={String(dashboard.lowStock)} note="Referencias que requieren reposición" icon={Boxes} /></section><section className="grid gap-6 xl:grid-cols-[1.6fr_0.9fr]"><article className="rounded-xl border border-line bg-surface-raised"><div className="flex items-center justify-between border-b border-line p-5"><div><h2 className="font-semibold">Pedidos recientes</h2><p className="mt-1 text-sm text-muted">Actividad comercial real</p></div><button onClick={() => setSection("Pedidos")} className="inline-flex items-center gap-1 text-sm font-semibold text-accent">Ver todos <ArrowUpRight className="size-4" /></button></div><div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead className="text-xs uppercase tracking-wider text-muted"><tr><th className="px-5 py-4 font-medium">Pedido</th><th className="px-5 py-4 font-medium">Cliente</th><th className="px-5 py-4 font-medium">Estado</th><th className="px-5 py-4 font-medium text-right">Importe</th><th className="px-5 py-4 font-medium">Fecha</th></tr></thead><tbody>{dashboard.recentOrders.map((order) => <tr key={order.number} className="border-t border-line/70 hover:bg-surface-hover/60"><td className="px-5 py-4 font-semibold">{order.number}</td><td className="px-5 py-4 text-[#d5ddd2]">{order.customer}</td><td className="px-5 py-4"><Status value={order.status} /></td><td className="px-5 py-4 text-right font-semibold">{order.total}</td><td className="px-5 py-4 text-muted">{order.createdAt}</td></tr>)}</tbody></table>{dashboard.recentOrders.length === 0 && <p className="p-10 text-center text-sm text-muted">Todavía no hay pedidos registrados.</p>}</div></article><article className="rounded-xl border border-line bg-surface-raised p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold">Alertas de almacén</h2><p className="mt-1 text-sm text-muted">Material bajo mínimo</p></div><span className="rounded-full bg-[#4a3b1c] px-2.5 py-1 text-xs font-bold text-[#f8d870]">{dashboard.alerts.length} alertas</span></div><div className="mt-5 space-y-3">{dashboard.alerts.map((alert) => <div key={alert.name} className="flex items-center justify-between rounded-lg border border-line bg-surface p-3"><div><p className="text-sm font-medium">{alert.name}</p><p className="mt-1 text-xs text-muted">Mínimo: {alert.minimum}</p></div><p className="text-sm font-semibold text-[#f8d870]">{alert.stock}</p></div>)}</div>{dashboard.alerts.length === 0 && <p className="mt-8 text-center text-sm text-muted">No hay alertas de stock.</p>}<button onClick={() => setSection("Almacén")} className="mt-5 w-full rounded-lg border border-line py-2.5 text-sm font-semibold text-[#d5ddd2] hover:bg-surface-hover">Revisar almacén</button></article></section></div>;
+}
+
+function QuotesView({ quotes, onConvert, onAdd }: { quotes: QuoteSummary[]; onConvert: (id: string) => void; onAdd: () => void }) {
+  return <div className="space-y-6"><section className="flex items-end justify-between gap-4"><div><h2 className="text-2xl font-semibold tracking-tight">Presupuestos</h2><p className="mt-1 text-sm text-muted">Importes, IVA y numeración calculados de forma segura en servidor.</p></div><button onClick={onAdd} className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-accent-foreground"><Plus className="size-4" />Nuevo presupuesto</button></section><article className="overflow-hidden rounded-xl border border-line bg-surface-raised"><div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead className="border-b border-line text-xs uppercase tracking-wider text-muted"><tr><th className="px-5 py-4">Número</th><th className="px-5 py-4">Cliente</th><th className="px-5 py-4">Estado</th><th className="px-5 py-4">Fecha</th><th className="px-5 py-4 text-right">Total</th><th className="px-5 py-4" /></tr></thead><tbody>{quotes.map((quote) => <tr key={quote.id} className="border-b border-line/70 last:border-0"><td className="px-5 py-4 font-semibold">{quote.number}</td><td className="px-5 py-4 text-muted">{quote.customer}</td><td className="px-5 py-4"><Status value={quote.status} /></td><td className="px-5 py-4 text-muted">{quote.createdAt}</td><td className="px-5 py-4 text-right font-semibold">{quote.total}</td><td className="px-5 py-4 text-right">{quote.status !== "converted" && quote.status !== "rejected" && quote.status !== "expired" && <button onClick={() => onConvert(quote.id)} className="rounded-lg px-3 py-2 text-xs font-semibold text-accent hover:bg-surface">Convertir en pedido</button>}</td></tr>)}</tbody></table>{quotes.length === 0 && <p className="p-12 text-center text-sm text-muted">Aún no hay presupuestos. Crea el primero desde un cliente y una línea de catálogo o libre.</p>}</div></article></div>;
+}
+
+function OrdersView({ orders, onStatus, onDuplicate }: { orders: OrderSummary[]; onStatus: (id: string, status: "pending" | "in_manufacturing" | "ready" | "delivered") => void; onDuplicate: (id: string) => void }) {
+  return <div className="space-y-6"><section><h2 className="text-2xl font-semibold tracking-tight">Pedidos</h2><p className="mt-1 text-sm text-muted">Seguimiento, estados y duplicación con historial de cambios.</p></section><article className="overflow-hidden rounded-xl border border-line bg-surface-raised"><div className="overflow-x-auto"><table className="w-full min-w-[820px] text-left text-sm"><thead className="border-b border-line text-xs uppercase tracking-wider text-muted"><tr><th className="px-5 py-4">Número</th><th className="px-5 py-4">Cliente</th><th className="px-5 py-4">Estado</th><th className="px-5 py-4">Fecha</th><th className="px-5 py-4 text-right">Total</th><th className="px-5 py-4" /></tr></thead><tbody>{orders.map((order) => <tr key={order.id} className="border-b border-line/70 last:border-0"><td className="px-5 py-4 font-semibold">{order.number}</td><td className="px-5 py-4 text-muted">{order.customer}</td><td className="px-5 py-4"><Status value={order.status} /></td><td className="px-5 py-4 text-muted">{order.createdAt}</td><td className="px-5 py-4 text-right font-semibold">{order.total}</td><td className="px-5 py-4 text-right"><select aria-label={`Cambiar estado de ${order.number}`} value={order.status} onChange={(event) => onStatus(order.id, event.target.value as "pending" | "in_manufacturing" | "ready" | "delivered")} className="rounded-lg border border-line bg-surface px-2 py-1.5 text-xs"><option value="pending">Pendiente</option><option value="in_manufacturing">En fabricación</option><option value="ready">Preparado</option><option value="delivered">Entregado</option></select><button onClick={() => onDuplicate(order.id)} className="ml-2 rounded-lg px-2 py-1.5 text-xs font-semibold text-accent hover:bg-surface">Duplicar</button></td></tr>)}</tbody></table>{orders.length === 0 && <p className="p-12 text-center text-sm text-muted">Aún no hay pedidos. Convierte un presupuesto para crear uno.</p>}</div></article></div>;
+}
+
+function QuoteForm({ customers, catalog, onClose, onNotice }: { customers: Client[]; catalog: CatalogData | null; onClose: () => void; onNotice: (message: string) => void }) {
+  const input = "mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2.5 outline-none focus:border-accent";
+  async function submit(formData: FormData) { const result = await createQuote(formData); onNotice(result.message); if (result.ok) onClose(); }
+  return <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/70 p-4"><form action={submit} className="mx-auto my-6 w-full max-w-2xl rounded-xl border border-line bg-surface-raised p-6 shadow-2xl"><div className="flex items-start justify-between"><div><p className="text-xs font-bold text-accent">CIRCUITO COMERCIAL</p><h2 className="mt-1 text-xl font-semibold">Nuevo presupuesto</h2></div><button type="button" onClick={onClose} className="rounded-md p-1 text-muted hover:bg-surface-hover" aria-label="Cerrar"><X className="size-5" /></button></div><div className="mt-6 grid gap-4 sm:grid-cols-2"><label className="block text-sm sm:col-span-2">Cliente<select required name="customerId" className={input} defaultValue=""><option value="" disabled>Selecciona un cliente</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name} · {customer.company}</option>)}</select></label><label className="block text-sm sm:col-span-2">Producto de catálogo (opcional)<select name="productId" className={input} defaultValue=""><option value="">Línea libre</option>{catalog?.products.map((product) => <option key={product.id} value={product.id}>{product.code} · {product.name}</option>)}</select></label><label className="block text-sm sm:col-span-2">Descripción de la línea<input required name="description" className={input} placeholder="Descripción comercial" /></label><label className="block text-sm">Cantidad<input required name="quantity" type="number" min="0.001" step="0.001" defaultValue="1" className={input} /></label><label className="block text-sm">Unidad<input name="unit" defaultValue="ud" className={input} /></label><label className="block text-sm">Precio unitario (EUR)<input required name="unitPrice" type="number" min="0" step="0.01" defaultValue="0" className={input} /></label><label className="block text-sm">IVA (%)<input required name="taxRate" type="number" min="0" max="100" step="0.01" defaultValue="21" className={input} /></label><label className="block text-sm">Descuento de línea (%)<input name="lineDiscount" type="number" min="0" max="100" step="0.01" defaultValue="0" className={input} /></label><label className="block text-sm">Descuento global (%)<input name="globalDiscount" type="number" min="0" max="100" step="0.01" defaultValue="0" className={input} /></label><label className="block text-sm sm:col-span-2">Observaciones<textarea name="notes" className={`${input} min-h-24 resize-y`} /></label></div><p className="mt-4 text-xs leading-5 text-muted">Los precios, descuentos, IVA, totales y número se validan y recalculan en servidor al guardar.</p><div className="mt-7 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg px-4 py-2.5 text-sm text-muted hover:bg-surface-hover">Cancelar</button><button className="rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-accent-foreground">Crear presupuesto</button></div></form></div>;
 }
 
 function ClientsView({ clients, query, setQuery, onAdd, onEdit, onArchive }: { clients: Client[]; query: string; setQuery: (value: string) => void; onAdd: () => void; onEdit: (client: Client) => void; onArchive: (client: Client) => void }) {

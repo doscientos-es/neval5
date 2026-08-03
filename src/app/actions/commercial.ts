@@ -1,0 +1,52 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+const quoteSchema = z.object({
+  customerId: z.string().uuid(), notes: z.string().trim().max(4000).optional(),
+  globalDiscount: z.coerce.number().min(0).max(100), description: z.string().trim().min(1, "Indica la descripción de la línea.").max(500),
+  quantity: z.coerce.number().positive("La cantidad debe ser mayor que cero."), unit: z.string().trim().min(1).max(20),
+  unitPrice: z.coerce.number().min(0), lineDiscount: z.coerce.number().min(0).max(100), taxRate: z.coerce.number().min(0).max(100), productId: z.string().uuid().optional(),
+});
+
+type Result = { ok: true; id: string; message: string } | { ok: false; message: string };
+
+export async function createQuote(formData: FormData): Promise<Result> {
+  const parsed = quoteSchema.safeParse({ customerId: formData.get("customerId"), notes: formData.get("notes") || undefined, globalDiscount: formData.get("globalDiscount") || 0, description: formData.get("description"), quantity: formData.get("quantity"), unit: formData.get("unit") || "ud", unitPrice: formData.get("unitPrice"), lineDiscount: formData.get("lineDiscount") || 0, taxRate: formData.get("taxRate") || 21, productId: formData.get("productId") || undefined });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa el presupuesto." };
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
+  const { data, error } = await supabase.rpc("create_quote", { p_customer_id: parsed.data.customerId, p_notes: parsed.data.notes || null, p_global_discount_pct: parsed.data.globalDiscount, p_lines: [{ product_id: parsed.data.productId || null, description: parsed.data.description, quantity: parsed.data.quantity, unit: parsed.data.unit, unit_price: parsed.data.unitPrice, discount_pct: parsed.data.lineDiscount, tax_rate: parsed.data.taxRate }] });
+  if (error) return { ok: false, message: "No se ha podido crear el presupuesto." };
+  revalidatePath("/");
+  return { ok: true, id: data, message: "Presupuesto creado correctamente." };
+}
+
+export async function convertQuote(quoteId: string): Promise<Result> {
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
+  const { data, error } = await supabase.rpc("convert_quote_to_order", { p_quote_id: quoteId });
+  if (error) return { ok: false, message: "No se ha podido convertir el presupuesto." };
+  revalidatePath("/");
+  return { ok: true, id: data, message: "Pedido creado desde el presupuesto." };
+}
+
+export async function changeOrderStatus(orderId: string, status: "pending" | "in_manufacturing" | "ready" | "delivered"): Promise<Result> {
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
+  const { data, error } = await supabase.rpc("set_order_status", { p_order_id: orderId, p_status: status, p_reason: null });
+  if (error) return { ok: false, message: "No se ha podido actualizar el pedido." };
+  revalidatePath("/");
+  return { ok: true, id: data, message: "Estado del pedido actualizado." };
+}
+
+export async function duplicateOrder(orderId: string): Promise<Result> {
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
+  const { data, error } = await supabase.rpc("duplicate_order", { p_order_id: orderId });
+  if (error) return { ok: false, message: "No se ha podido duplicar el pedido." };
+  revalidatePath("/");
+  return { ok: true, id: data, message: "Pedido duplicado en estado Pendiente." };
+}
