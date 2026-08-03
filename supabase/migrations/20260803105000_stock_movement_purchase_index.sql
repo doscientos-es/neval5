@@ -1,0 +1,1 @@
+create index stock_movements_purchase_order_id_idx on public.stock_movements(purchase_order_id);
