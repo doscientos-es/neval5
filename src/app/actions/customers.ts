@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const customerSchema = z.object({
@@ -12,7 +11,7 @@ const customerSchema = z.object({
 });
 
 export type CreateCustomerResult =
-  | { ok: true; customer: { id: string; initials: string; name: string; company: string; phone: string; total: string; orders: number }; mode: "database" | "demo" }
+  | { ok: true; customer: { id: string; initials: string; name: string; company: string; phone: string; total: string; orders: number } }
   | { ok: false; message: string };
 
 export async function createCustomer(formData: FormData): Promise<CreateCustomerResult> {
@@ -34,10 +33,8 @@ export async function createCustomer(formData: FormData): Promise<CreateCustomer
     orders: 0,
   };
 
-  if (!isSupabaseConfigured()) return { ok: true, customer, mode: "demo" };
-
   const supabase = await createServerSupabaseClient();
-  if (!supabase) return { ok: false, message: "No se ha podido iniciar Supabase." };
+  if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Tu sesión ha caducado. Vuelve a iniciar sesión." };
 
@@ -57,5 +54,5 @@ export async function createCustomer(formData: FormData): Promise<CreateCustomer
   if (error) return { ok: false, message: "No se ha podido guardar el cliente." };
 
   revalidatePath("/");
-  return { ok: true, customer: { ...customer, id: inserted.id }, mode: "database" };
+  return { ok: true, customer: { ...customer, id: inserted.id } };
 }

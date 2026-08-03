@@ -4,11 +4,10 @@ Aplicación de gestión comercial, compras y almacén para fábrica de mobiliari
 
 ## Arranque local
 
-1. Copia `.env.example` como `.env.local` y completa las credenciales de Supabase.
-2. Crea un proyecto en Supabase y aplica la migración de `supabase/migrations`.
-3. Ejecuta `npm run dev`.
+1. Ejecuta `npx vercel env pull .env.local --environment=development`.
+2. Ejecuta `npm run dev`.
 
-Mientras no haya credenciales, la aplicación muestra datos de demostración para validar la interfaz y los flujos.
+La aplicación requiere Supabase. No incluye un modo de demostración ni datos simulados: cada pantalla lee y escribe únicamente los datos autorizados de la organización del usuario.
 
 ## Comprobaciones
 
