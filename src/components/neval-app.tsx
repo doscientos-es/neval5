@@ -22,9 +22,11 @@ import {
 } from "lucide-react";
 import { useMemo, useState, type ComponentType } from "react";
 import { Button } from "@/components/ui/button";
+import { createCustomer } from "@/app/actions/customers";
+import type { CustomerSummary } from "@/features/customers/customer-repository";
 
 type Section = "Dashboard" | "Clientes" | "Presupuestos" | "Pedidos" | "Compras" | "Almacén" | "Informes" | "Configuración";
-type Client = { initials: string; name: string; company: string; phone: string; total: string; orders: number };
+type Client = CustomerSummary;
 
 const navigation: { name: Section; icon: ComponentType<{ className?: string }> }[] = [
   { name: "Dashboard", icon: LayoutDashboard },
@@ -38,10 +40,10 @@ const navigation: { name: Section; icon: ComponentType<{ className?: string }> }
 ];
 
 const initialClients: Client[] = [
-  { initials: "AS", name: "Ana Serrano", company: "Serrano Interiorismo", phone: "+34 612 480 920", total: "18.450 €", orders: 6 },
-  { initials: "DM", name: "David Martínez", company: "Martínez & Hijos", phone: "+34 639 120 485", total: "12.890 €", orders: 4 },
-  { initials: "LC", name: "Lucía Campos", company: "Campos Cocinas", phone: "+34 655 871 223", total: "8.210 €", orders: 3 },
-  { initials: "JR", name: "Javier Rivas", company: "Rivas Reformas", phone: "+34 687 093 455", total: "7.850 €", orders: 2 },
+  { id: "demo-ana", initials: "AS", name: "Ana Serrano", company: "Serrano Interiorismo", phone: "+34 612 480 920", total: "18.450 €", orders: 6 },
+  { id: "demo-david", initials: "DM", name: "David Martínez", company: "Martínez & Hijos", phone: "+34 639 120 485", total: "12.890 €", orders: 4 },
+  { id: "demo-lucia", initials: "LC", name: "Lucía Campos", company: "Campos Cocinas", phone: "+34 655 871 223", total: "8.210 €", orders: 3 },
+  { id: "demo-javier", initials: "JR", name: "Javier Rivas", company: "Rivas Reformas", phone: "+34 687 093 455", total: "7.850 €", orders: 2 },
 ];
 
 const orders = [
@@ -82,24 +84,25 @@ function Metric({ label, value, note, icon: Icon, accent }: { label: string; val
   );
 }
 
-export function NevalApp() {
+export function NevalApp({ initialCustomers }: { initialCustomers?: Client[] }) {
   const [section, setSection] = useState<Section>("Dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [showNewClient, setShowNewClient] = useState(false);
-  const [clients, setClients] = useState(initialClients);
+  const [clients, setClients] = useState(initialCustomers ?? initialClients);
   const [notice, setNotice] = useState<string | null>(null);
   const copy = titleCopy[section];
   const visibleClients = useMemo(() => clients.filter((client) => `${client.name} ${client.company}`.toLowerCase().includes(query.toLowerCase())), [clients, query]);
 
-  function addClient(formData: FormData) {
-    const name = String(formData.get("name") || "").trim();
-    const company = String(formData.get("company") || "").trim();
-    const phone = String(formData.get("phone") || "").trim();
-    if (!name) return;
-    setClients((current) => [{ initials: name.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase(), name, company: company || "Cliente particular", phone: phone || "Sin teléfono", total: "0 €", orders: 0 }, ...current]);
+  async function addClient(formData: FormData) {
+    const result = await createCustomer(formData);
+    if (!result.ok) {
+      setNotice(result.message);
+      return;
+    }
+    setClients((current) => [result.customer, ...current]);
     setShowNewClient(false);
-    setNotice("Cliente creado correctamente.");
+    setNotice(result.mode === "database" ? "Cliente guardado correctamente." : "Cliente creado en el entorno de demostración.");
   }
 
   const side = (
