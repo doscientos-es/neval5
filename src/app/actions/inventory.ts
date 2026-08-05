@@ -61,6 +61,14 @@ export async function createPurchaseOrder(formData: FormData): Promise<{ ok: boo
   revalidatePath("/"); return { ok: true, message: "Pedido de compra creado." };
 }
 
+export async function changePurchaseOrderStatus(purchaseOrderId: string, status: "requested" | "cancelled"): Promise<{ ok: boolean; message: string }> {
+  if (!z.string().uuid().safeParse(purchaseOrderId).success) return { ok: false, message: "El pedido de compra no es válido." };
+  const supabase = await createServerSupabaseClient(); if (!supabase) return { ok: false, message: "La conexión segura no está disponible." };
+  const { error } = await supabase.rpc("set_purchase_order_status", { p_purchase_order_id: purchaseOrderId, p_status: status });
+  if (error) return { ok: false, message: status === "requested" ? "No se ha podido solicitar el pedido de compra." : "No se ha podido cancelar el pedido de compra." };
+  revalidatePath("/"); return { ok: true, message: status === "requested" ? "Pedido de compra marcado como solicitado." : "Pedido de compra cancelado." };
+}
+
 export async function receivePurchaseOrder(purchaseOrderId: string, lineId: string, quantity: number): Promise<{ ok: boolean; message: string }> {
   if (!Number.isFinite(quantity) || quantity <= 0) return { ok: false, message: "Indica una cantidad válida." };
   const supabase = await createServerSupabaseClient(); if (!supabase) return { ok: false, message: "La conexión segura no está disponible." };

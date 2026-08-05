@@ -1175,6 +1175,13 @@ export type Database = {
         }
         Returns: string
       }
+      set_purchase_order_status: {
+        Args: {
+          p_purchase_order_id: string
+          p_status: Database["public"]["Enums"]["purchase_status"]
+        }
+        Returns: string
+      }
       set_quote_status: {
         Args: {
           p_quote_id: string
