@@ -30,8 +30,14 @@ export async function POST(request: Request) {
   if (existingError) return Response.json({ error: "No se ha podido comprobar duplicados." }, { status: 500 });
   const existingNames = new Set(existing.map((customer) => `${customer.name}|${customer.company ?? ""}`.toLocaleLowerCase("es-ES")));
   const existingEmails = new Set(existing.flatMap((customer) => customer.email ? [customer.email.toLocaleLowerCase("es-ES")] : []));
-  const duplicates = parsed.records.filter((row) => existingNames.has(`${String(row.nombre)}|${String(row.empresa ?? "")}`.toLocaleLowerCase("es-ES")) || (String(row.email ?? "") && existingEmails.has(String(row.email).toLocaleLowerCase("es-ES")))).map((row) => `Fila ${row.line}: posible duplicado (${String(row.nombre)}).`);
+  const duplicateRows = parsed.records.filter((row) => existingNames.has(`${String(row.nombre)}|${String(row.empresa ?? "")}`.toLocaleLowerCase("es-ES")) || (String(row.email ?? "") && existingEmails.has(String(row.email).toLocaleLowerCase("es-ES"))));
+  const duplicates = duplicateRows.map((row) => `Fila ${row.line}: posible duplicado (${String(row.nombre)}).`);
   if (!confirm) return Response.json({ valid: true, total: parsed.records.length, preview: parsed.records.slice(0, 10), duplicates });
+  if (duplicateRows.length) {
+    const { error: reviewError } = await supabase.from("import_reviews").insert(duplicateRows.map((row) => ({ organization_id: membership.organization_id, entity_type: "customer", payload: row, reason: "Posible duplicado por nombre, empresa o email", created_by: user.id })));
+    if (reviewError) return Response.json({ error: "No se han podido enviar los duplicados a revisión." }, { status: 400 });
+    return Response.json({ reviewQueued: duplicateRows.length, imported: 0 }, { status: 202 });
+  }
   const { error } = await supabase.from("customers").insert(parsed.records.map((row) => ({ organization_id: membership.organization_id, name: String(row.nombre), company: String(row.empresa || "") || null, email: String(row.email || "") || null, phone: String(row.telefono || "") || null, mobile: String(row.movil || "") || null, address: String(row.direccion || "") || null, city: String(row.poblacion || "") || null, province: String(row.provincia || "") || null })));
   if (error) return Response.json({ error: "No se ha podido importar el archivo." }, { status: 400 });
   return Response.json({ imported: parsed.records.length }, { status: 201 });
