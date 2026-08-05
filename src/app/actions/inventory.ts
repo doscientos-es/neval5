@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const supplierSchema = z.object({ name: z.string().trim().min(2).max(160), contactName: z.string().trim().max(160).optional(), phone: z.string().trim().max(40).optional(), email: z.string().trim().email().max(254).optional().or(z.literal("")) });
+const purchaseSchema = z.object({ supplierId: z.string().uuid(), productId: z.string().uuid(), quantity: z.coerce.number().positive(), unitPrice: z.coerce.number().min(0), notes: z.string().trim().max(4000).optional() });
 
 export async function createSupplier(formData: FormData): Promise<{ ok: boolean; message: string }> {
   const parsed = supplierSchema.safeParse({ name: formData.get("name"), contactName: formData.get("contactName") || undefined, phone: formData.get("phone") || undefined, email: formData.get("email") || undefined });
@@ -22,4 +23,13 @@ export async function adjustProductStock(productId: string, quantity: number, re
   const supabase = await createServerSupabaseClient(); if (!supabase) return { ok: false, message: "La conexión segura no está disponible." };
   const { error } = await supabase.rpc("adjust_stock", { p_product_id: productId, p_quantity: quantity, p_reason: reason, p_idempotency_key: crypto.randomUUID() });
   if (error) return { ok: false, message: "No se ha podido ajustar el stock." }; revalidatePath("/"); return { ok: true, message: "Ajuste de stock registrado." };
+}
+
+export async function createPurchaseOrder(formData: FormData): Promise<{ ok: boolean; message: string }> {
+  const parsed = purchaseSchema.safeParse({ supplierId: formData.get("supplierId"), productId: formData.get("productId"), quantity: formData.get("quantity"), unitPrice: formData.get("unitPrice"), notes: formData.get("notes") || undefined });
+  if (!parsed.success) return { ok: false, message: "Revisa los datos del pedido de compra." };
+  const supabase = await createServerSupabaseClient(); if (!supabase) return { ok: false, message: "La conexión segura no está disponible." };
+  const { error } = await supabase.rpc("create_purchase_order", { p_supplier_id: parsed.data.supplierId, p_notes: parsed.data.notes || null, p_lines: [{ product_id: parsed.data.productId, quantity: parsed.data.quantity, unit_price: parsed.data.unitPrice }] });
+  if (error) return { ok: false, message: "No se ha podido crear el pedido de compra." };
+  revalidatePath("/"); return { ok: true, message: "Pedido de compra creado." };
 }
