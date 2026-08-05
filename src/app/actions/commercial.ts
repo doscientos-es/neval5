@@ -15,7 +15,7 @@ export async function createQuote(formData: FormData): Promise<Result> {
   const supabase = await createServerSupabaseClient();
   if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
   const lines = await resolveTariffPrices(supabase, parsed.data.customerId, parsed.data.lines);
-  const { data, error } = await supabase.rpc("create_quote", { p_customer_id: parsed.data.customerId, p_notes: parsed.data.notes || null, p_global_discount_pct: parsed.data.globalDiscount, p_lines: lines.map((line) => ({ product_id: line.productId || null, description: line.description, quantity: line.quantity, unit: line.unit, unit_price: line.unitPrice, discount_pct: line.lineDiscount, tax_rate: line.taxRate })) });
+  const { data, error } = await supabase.rpc("create_quote", { p_customer_id: parsed.data.customerId, p_notes: parsed.data.notes || "", p_global_discount_pct: parsed.data.globalDiscount, p_lines: lines.map((line) => ({ product_id: line.productId || null, description: line.description, quantity: line.quantity, unit: line.unit, unit_price: line.unitPrice, discount_pct: line.lineDiscount, tax_rate: line.taxRate })) });
   if (error) return { ok: false, message: "No se ha podido crear el presupuesto." };
   revalidatePath("/");
   return { ok: true, id: data, message: "Presupuesto creado correctamente." };
@@ -29,7 +29,7 @@ export async function createManualOrder(formData: FormData): Promise<Result> {
   const salesRepId = String(formData.get("salesRepId") || "").trim() || null;
   if (salesRepId && !z.string().uuid().safeParse(salesRepId).success) return { ok: false, message: "El comercial seleccionado no es válido." };
   const lines = await resolveTariffPrices(supabase, parsed.data.customerId, parsed.data.lines);
-  const { data, error } = await supabase.rpc("create_order", { p_customer_id: parsed.data.customerId, p_notes: parsed.data.notes || null, p_lines: lines.map((line) => ({ product_id: line.productId || null, description: line.description, quantity: line.quantity, unit: line.unit, unit_price: line.unitPrice, discount_pct: line.lineDiscount, tax_rate: line.taxRate })) });
+  const { data, error } = await supabase.rpc("create_order", { p_customer_id: parsed.data.customerId, p_notes: parsed.data.notes || "", p_lines: lines.map((line) => ({ product_id: line.productId || null, description: line.description, quantity: line.quantity, unit: line.unit, unit_price: line.unitPrice, discount_pct: line.lineDiscount, tax_rate: line.taxRate })) });
   if (error) return { ok: false, message: "No se ha podido crear el pedido." };
   if (salesRepId) {
     const { error: salesRepError } = await supabase.rpc("assign_order_sales_rep", { p_order_id: data, p_sales_rep_id: salesRepId });
@@ -77,7 +77,7 @@ export async function changeQuoteStatus(quoteId: string, status: "draft" | "sent
 export async function changeOrderStatus(orderId: string, status: "pending" | "in_manufacturing" | "ready" | "delivered", reason?: string): Promise<Result> {
   const supabase = await createServerSupabaseClient();
   if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
-  const { data, error } = await supabase.rpc("set_order_status", { p_order_id: orderId, p_status: status, p_reason: reason?.trim() || null });
+  const { data, error } = await supabase.rpc("set_order_status", { p_order_id: orderId, p_status: status, p_reason: reason?.trim() || undefined });
   if (error) return { ok: false, message: "No se ha podido actualizar el pedido." };
   revalidatePath("/");
   return { ok: true, id: data, message: "Estado del pedido actualizado." };
@@ -96,7 +96,7 @@ export async function assignOrderSalesRep(orderId: string, salesRepId: string | 
   if (!z.string().uuid().safeParse(orderId).success || (salesRepId !== null && !z.string().uuid().safeParse(salesRepId).success)) return { ok: false, message: "El comercial seleccionado no es válido." };
   const supabase = await createServerSupabaseClient();
   if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
-  const { data, error } = await supabase.rpc("assign_order_sales_rep", { p_order_id: orderId, p_sales_rep_id: salesRepId });
+  const { data, error } = await supabase.rpc("assign_order_sales_rep", { p_order_id: orderId, p_sales_rep_id: salesRepId ?? undefined });
   if (error) return { ok: false, message: "No se ha podido asignar el comercial." };
   revalidatePath("/"); return { ok: true, id: data, message: salesRepId ? "Comercial asignado al pedido." : "Comercial retirado del pedido." };
 }

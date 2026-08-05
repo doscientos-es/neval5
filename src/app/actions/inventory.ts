@@ -56,7 +56,7 @@ export async function createPurchaseOrder(formData: FormData): Promise<{ ok: boo
   const parsed = purchaseSchema.safeParse({ supplierId: formData.get("supplierId"), productId: formData.get("productId"), quantity: formData.get("quantity"), unitPrice: formData.get("unitPrice"), notes: formData.get("notes") || undefined });
   if (!parsed.success) return { ok: false, message: "Revisa los datos del pedido de compra." };
   const supabase = await createServerSupabaseClient(); if (!supabase) return { ok: false, message: "La conexión segura no está disponible." };
-  const { error } = await supabase.rpc("create_purchase_order", { p_supplier_id: parsed.data.supplierId, p_notes: parsed.data.notes || null, p_lines: [{ product_id: parsed.data.productId, quantity: parsed.data.quantity, unit_price: parsed.data.unitPrice }] });
+  const { error } = await supabase.rpc("create_purchase_order", { p_supplier_id: parsed.data.supplierId, p_notes: parsed.data.notes || "", p_lines: [{ product_id: parsed.data.productId, quantity: parsed.data.quantity, unit_price: parsed.data.unitPrice }] });
   if (error) return { ok: false, message: "No se ha podido crear el pedido de compra." };
   revalidatePath("/"); return { ok: true, message: "Pedido de compra creado." };
 }

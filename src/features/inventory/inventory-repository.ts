@@ -22,7 +22,7 @@ export async function getInventoryData(): Promise<InventoryData | null> {
   movementsResult.data.forEach((movement) => balances.set(movement.product_id, (balances.get(movement.product_id) ?? 0) + Number(movement.quantity)));
   return {
     suppliers: suppliersResult.data.map((supplier) => ({ id: supplier.id, name: supplier.name, contactName: supplier.contact_name || "", phone: supplier.phone || "", email: supplier.email || "" })),
-    purchases: purchasesResult.data.map((purchase) => ({ id: purchase.id, number: purchase.number, status: purchase.status, total: Number(purchase.total).toFixed(2), supplier: purchase.suppliers?.[0]?.name || "Proveedor", lines: purchase.purchase_order_lines.map((line) => ({ id: line.id, name: line.products?.[0]?.name || "Producto", unit: line.products?.[0]?.stock_unit || "ud", quantity: Number(line.quantity), received: Number(line.received_quantity) })) })),
+    purchases: purchasesResult.data.map((purchase) => ({ id: purchase.id, number: purchase.number, status: purchase.status, total: Number(purchase.total).toFixed(2), supplier: purchase.suppliers?.name || "Proveedor", lines: purchase.purchase_order_lines.map((line) => ({ id: line.id, name: line.products?.name || "Producto", unit: line.products?.stock_unit || "ud", quantity: Number(line.quantity), received: Number(line.received_quantity) })) })),
     stock: productsResult.data.map((product) => ({ id: product.id, code: product.code, name: product.name, unit: product.stock_unit, minimum: Number(product.minimum_stock), available: balances.get(product.id) ?? 0 })),
   };
 }

@@ -42,7 +42,7 @@ export async function getCatalogData(): Promise<CatalogData | null> {
       basePrice: Number(product.base_price).toFixed(2), trackStock: product.track_stock,
       stockUnit: product.stock_unit, minimumStock: String(product.minimum_stock),
       familyId: product.family_id, taxRateId: product.default_tax_rate_id,
-      familyName: product.product_families?.[0]?.name || "Sin familia", taxName: product.tax_rates?.[0]?.name || "Sin IVA",
+      familyName: product.product_families?.name || "Sin familia", taxName: product.tax_rates?.name || "Sin IVA",
     })),
     families: familiesResult.data,
     taxes: taxesResult.data.map((tax) => ({ id: tax.id, name: tax.name, rate: String(tax.rate), isDefault: tax.is_default })),
