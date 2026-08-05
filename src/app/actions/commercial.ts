@@ -86,6 +86,15 @@ export async function duplicateOrder(orderId: string): Promise<Result> {
   return { ok: true, id: data, message: "Pedido duplicado en estado Pendiente." };
 }
 
+export async function assignOrderSalesRep(orderId: string, salesRepId: string | null): Promise<Result> {
+  if (!z.string().uuid().safeParse(orderId).success || (salesRepId !== null && !z.string().uuid().safeParse(salesRepId).success)) return { ok: false, message: "El comercial seleccionado no es válido." };
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
+  const { data, error } = await supabase.rpc("assign_order_sales_rep", { p_order_id: orderId, p_sales_rep_id: salesRepId });
+  if (error) return { ok: false, message: "No se ha podido asignar el comercial." };
+  revalidatePath("/"); return { ok: true, id: data, message: salesRepId ? "Comercial asignado al pedido." : "Comercial retirado del pedido." };
+}
+
 export async function getOrderHistory(orderId: string): Promise<{ ok: true; events: { id: string; type: string; createdAt: string; payload: Record<string, unknown> }[] } | { ok: false; message: string }> {
   const supabase = await createServerSupabaseClient();
   if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
