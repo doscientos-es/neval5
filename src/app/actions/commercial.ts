@@ -60,6 +60,14 @@ export async function convertQuote(quoteId: string): Promise<Result> {
   return { ok: true, id: data, message: "Pedido creado desde el presupuesto." };
 }
 
+export async function changeQuoteStatus(quoteId: string, status: "draft" | "sent" | "accepted" | "rejected" | "expired"): Promise<Result> {
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
+  const { data, error } = await supabase.rpc("set_quote_status", { p_quote_id: quoteId, p_status: status });
+  if (error) return { ok: false, message: "No se ha podido actualizar el estado del presupuesto." };
+  revalidatePath("/"); return { ok: true, id: data, message: "Estado del presupuesto actualizado." };
+}
+
 export async function changeOrderStatus(orderId: string, status: "pending" | "in_manufacturing" | "ready" | "delivered"): Promise<Result> {
   const supabase = await createServerSupabaseClient();
   if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
