@@ -40,7 +40,7 @@ function cellToText(value: unknown) {
   return value == null ? "" : String(value).trim();
 }
 
-export function readImportRows(sourceRows: ImportRows, required: string[], mapping?: Record<string, string>) {
+export function readImportRows(sourceRows: ImportRows, required: string[], mapping?: Record<string, string>, optional: string[] = []) {
   const rows = sourceRows.map((row) => row.map(cellToText));
   const header = rows.shift() ?? [];
   const normalized = header.map(normalizeImportHeader);
@@ -55,16 +55,20 @@ export function readImportRows(sourceRows: ImportRows, required: string[], mappi
       const columnIndex = normalized.indexOf(sourceForField(field));
       result[field] = row[columnIndex] ?? "";
     });
+    optional.forEach((field) => {
+      const columnIndex = normalized.indexOf(sourceForField(field));
+      if (columnIndex >= 0) result[field] = row[columnIndex] ?? "";
+    });
     return result;
   });
   return { records, headers: header } as const;
 }
 
-export function readImportCsv(text: string, required: string[], mapping?: Record<string, string>) {
+export function readImportCsv(text: string, required: string[], mapping?: Record<string, string>, optional?: string[]) {
   const source = text.replace(/^\uFEFF/, "");
   const firstLine = source.split(/\r?\n/, 1)[0] ?? "";
   const delimiter = (firstLine.match(/;/g)?.length ?? 0) >= (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
-  return readImportRows(parseWithDelimiter(source, delimiter), required, mapping);
+  return readImportRows(parseWithDelimiter(source, delimiter), required, mapping, optional);
 }
 
 export function parseImportMapping(value: FormDataEntryValue | null): Record<string, string> {

@@ -30,7 +30,7 @@ export async function readImportHeaders(file: File) {
   return first.split(separator).map((header) => header.trim().replace(/^"|"$/g, "")).filter(Boolean);
 }
 
-export async function readImportFile(file: File, required: string[], mapping?: Record<string, string>) {
+export async function readImportFile(file: File, required: string[], mapping?: Record<string, string>, optional?: string[]) {
   const rows = await readRows(file);
-  return rows ? readImportRows(rows, required, mapping) : readImportCsv(await file.text(), required, mapping);
+  return rows ? readImportRows(rows, required, mapping, optional) : readImportCsv(await file.text(), required, mapping, optional);
 }
