@@ -15,6 +15,9 @@ export type DashboardData = {
   deliveredOrders: number;
   orderValue: string;
   lowStock: number;
+  quoteConversion: string;
+  pendingPurchases: number;
+  purchaseValue: string;
   recentOrders: DashboardOrder[];
   alerts: { name: string; stock: string; minimum: string }[];
 };
@@ -28,14 +31,16 @@ export async function getDashboardData(): Promise<DashboardData | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [profileResult, ordersResult, productsResult, movementsResult] = await Promise.all([
+  const [profileResult, ordersResult, productsResult, movementsResult, quotesResult, purchasesResult] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
     supabase.from("orders").select("number, status, total, created_at, customer_name_snapshot").order("created_at", { ascending: false }),
     supabase.from("products").select("id, name, stock_unit, minimum_stock").eq("track_stock", true).is("archived_at", null),
     supabase.from("stock_movements").select("product_id, quantity"),
+    supabase.from("quotes").select("status"),
+    supabase.from("purchase_orders").select("status, total"),
   ]);
 
-  if (ordersResult.error || productsResult.error || movementsResult.error) {
+  if (ordersResult.error || productsResult.error || movementsResult.error || quotesResult.error || purchasesResult.error) {
     throw new Error("No se ha podido cargar el panel de control.");
   }
 
@@ -62,6 +67,9 @@ export async function getDashboardData(): Promise<DashboardData | null> {
     deliveredOrders: orders.filter((order) => order.status === "delivered").length,
     orderValue: euro.format(orders.reduce((sum, order) => sum + Number(order.total), 0)),
     lowStock: alerts.length,
+    quoteConversion: quotesResult.data.length ? `${Math.round((quotesResult.data.filter((quote) => quote.status === "converted").length / quotesResult.data.length) * 100)} %` : "—",
+    pendingPurchases: purchasesResult.data.filter((purchase) => !["received", "cancelled"].includes(purchase.status)).length,
+    purchaseValue: euro.format(purchasesResult.data.filter((purchase) => purchase.status !== "cancelled").reduce((sum, purchase) => sum + Number(purchase.total), 0)),
     recentOrders: orders.slice(0, 6).map((order) => ({
       number: order.number,
       customer: order.customer_name_snapshot,
