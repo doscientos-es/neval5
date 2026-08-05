@@ -34,7 +34,7 @@ function parseDocument(formData: FormData, includeDiscount: boolean) {
   const raw = formData.get("lines");
   try {
     const descriptions = formData.getAll("description"); const products = formData.getAll("productId"); const quantities = formData.getAll("quantity"); const units = formData.getAll("unit"); const prices = formData.getAll("unitPrice"); const discounts = formData.getAll("lineDiscount"); const taxes = formData.getAll("taxRate");
-    const lines = typeof raw === "string" && raw ? JSON.parse(raw) : descriptions.map((description, index) => ({ productId: products[index] || undefined, description, quantity: quantities[index], unit: units[index] || "ud", unitPrice: prices[index], lineDiscount: discounts[index] || 0, taxRate: taxes[index] || 21 }));
+    const lines = (typeof raw === "string" && raw ? JSON.parse(raw) : descriptions.map((description, index) => ({ productId: products[index] || undefined, description, quantity: quantities[index], unit: units[index] || "ud", unitPrice: prices[index], lineDiscount: discounts[index] || 0, taxRate: taxes[index] || 21 }))).filter((line: { description?: unknown }) => typeof line.description === "string" && line.description.trim().length > 0);
     return { customerId: formData.get("customerId"), notes: formData.get("notes") || undefined, globalDiscount: includeDiscount ? formData.get("globalDiscount") || 0 : 0, lines };
   } catch { return { customerId: "", notes: undefined, globalDiscount: 0, lines: [] }; }
 }
