@@ -90,7 +90,8 @@ function Metric({ label, value, note, icon: Icon, accent }: { label: string; val
 
 export function NevalApp({ initialCustomers, dashboard, catalog, commercial, inventory, configuration }: { initialCustomers: Client[]; dashboard: DashboardData | null; catalog: CatalogData | null; commercial: CommercialData | null; inventory: InventoryData | null; configuration: ConfigurationData | null }) {
   const router = useRouter();
-  const [section, setSection] = useState<Section>("Dashboard");
+  const operationalOnly = ["production", "cutter", "cnc_operator"].includes(commercial?.role ?? "");
+  const [section, setSection] = useState<Section>(operationalOnly ? "Pedidos" : "Dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [showNewClient, setShowNewClient] = useState(false);
@@ -116,6 +117,7 @@ export function NevalApp({ initialCustomers, dashboard, catalog, commercial, inv
   const [clients, setClients] = useState(initialCustomers);
   const [notice, setNotice] = useState<string | null>(null);
   const copy = titleCopy[section];
+  const visibleNavigation = operationalOnly ? navigation.filter(({ name }) => name === "Pedidos" || name === "Almacén") : navigation;
   const visibleClients = useMemo(() => clients.filter((client) => `${client.name} ${client.company}`.toLowerCase().includes(query.toLowerCase())), [clients, query]);
 
   async function addClient(formData: FormData) {
@@ -171,9 +173,9 @@ export function NevalApp({ initialCustomers, dashboard, catalog, commercial, inv
         <div><p className="font-semibold tracking-tight">NEVAL <span className="text-accent">5</span></p><p className="text-xs text-muted">Gestión de fábrica</p></div>
       </div>
       <nav className="mt-8 space-y-1" aria-label="Navegación principal">
-        {navigation.map(({ name, icon: Icon }) => <button key={name} onClick={() => { setSection(name); setMobileOpen(false); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${section === name ? "bg-primary text-white shadow-sm" : "text-[#bec8bb] hover:bg-surface-hover hover:text-white"}`}><Icon className="size-4" />{name}</button>)}
+        {visibleNavigation.map(({ name, icon: Icon }) => <button key={name} onClick={() => { setSection(name); setMobileOpen(false); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${section === name ? "bg-primary text-white shadow-sm" : "text-[#bec8bb] hover:bg-surface-hover hover:text-white"}`}><Icon className="size-4" />{name}</button>)}
       </nav>
-      <div className="mt-auto rounded-xl border border-line bg-surface-raised p-4"><p className="text-xs font-medium text-accent">EMPRESA ACTIVA</p><p className="mt-2 text-xs leading-5 text-muted">Datos protegidos y aislados por organización.</p><button onClick={() => setSection("Configuración")} className="mt-3 text-xs font-semibold text-white underline underline-offset-4">Ir a configuración</button></div>
+      <div className="mt-auto rounded-xl border border-line bg-surface-raised p-4"><p className="text-xs font-medium text-accent">EMPRESA ACTIVA</p><p className="mt-2 text-xs leading-5 text-muted">Datos protegidos y aislados por organización.</p>{!operationalOnly && <button onClick={() => setSection("Configuración")} className="mt-3 text-xs font-semibold text-white underline underline-offset-4">Ir a configuración</button>}</div>
       <div className="mt-4 flex items-center gap-3 border-t border-line px-2 pt-4"><div className="flex size-9 items-center justify-center rounded-full bg-[#31432f] text-sm font-bold text-accent">{(dashboard?.userName ?? "U").slice(0, 2).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{dashboard?.userName ?? "Usuario"}</p><p className="text-xs text-muted">Sesión segura</p></div><ChevronDown className="size-4 text-muted" /></div>
     </aside>
   );
@@ -184,7 +186,7 @@ export function NevalApp({ initialCustomers, dashboard, catalog, commercial, inv
     <section className="min-w-0 flex-1 lg:ms-72">
       <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-line bg-surface/95 px-5 backdrop-blur lg:px-8">
         <div className="flex items-center gap-3"><button onClick={() => setMobileOpen(true)} className="rounded-md p-2 hover:bg-surface-hover lg:hidden" aria-label="Abrir navegación"><Menu className="size-5" /></button><div><p className="text-xs text-muted">{copy.eyebrow}</p><h1 className="font-semibold">{copy.title}</h1></div></div>
-        <div className="flex items-center gap-2"><button className="rounded-lg border border-line p-2.5 text-muted hover:bg-surface-hover" aria-label="Notificaciones"><Bell className="size-4" /></button><Button onClick={() => section === "Clientes" ? setShowNewClient(true) : section === "Configuración" ? setShowNewProduct(true) : section === "Presupuestos" ? setShowNewQuote(true) : section === "Pedidos" ? setShowNewOrder(true) : section === "Compras" ? setShowNewPurchase(true) : section === "Almacén" ? setShowStockAdjustment(true) : router.push("/api/export/csv?type=orders")} className="h-10 gap-2 bg-accent px-3.5 font-bold text-accent-foreground hover:bg-accent/90"><Plus className="size-4" />{section === "Configuración" ? "Nuevo producto" : copy.action}</Button></div>
+        <div className="flex items-center gap-2"><button className="rounded-lg border border-line p-2.5 text-muted hover:bg-surface-hover" aria-label="Notificaciones"><Bell className="size-4" /></button>{!operationalOnly && <Button onClick={() => section === "Clientes" ? setShowNewClient(true) : section === "Configuración" ? setShowNewProduct(true) : section === "Presupuestos" ? setShowNewQuote(true) : section === "Pedidos" ? setShowNewOrder(true) : section === "Compras" ? setShowNewPurchase(true) : section === "Almacén" ? setShowStockAdjustment(true) : router.push("/api/export/csv?type=orders")} className="h-10 gap-2 bg-accent px-3.5 font-bold text-accent-foreground hover:bg-accent/90"><Plus className="size-4" />{section === "Configuración" ? "Nuevo producto" : copy.action}</Button>}</div>
       </header>
       <div className="mx-auto max-w-[1550px] p-5 lg:p-8">
         {notice && <div className="mb-5 flex items-center justify-between rounded-lg border border-[#4b6e40] bg-[#1c2e19] px-4 py-3 text-sm text-[#d6f9c7]"><span>{notice}</span><button onClick={() => setNotice(null)} aria-label="Cerrar aviso"><X className="size-4" /></button></div>}
