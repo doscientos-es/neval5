@@ -1250,6 +1250,10 @@ export type Database = {
         }
         Returns: string
       }
+      update_order_notes: {
+        Args: { p_notes: string; p_order_id: string }
+        Returns: string
+      }
     }
     Enums: {
       app_role:

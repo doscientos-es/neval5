@@ -101,6 +101,14 @@ export async function assignOrderSalesRep(orderId: string, salesRepId: string | 
   revalidatePath("/"); return { ok: true, id: data, message: salesRepId ? "Comercial asignado al pedido." : "Comercial retirado del pedido." };
 }
 
+export async function updateOrderNotes(orderId: string, notes: string): Promise<Result> {
+  if (!z.string().uuid().safeParse(orderId).success || notes.length > 4000) return { ok: false, message: "Las observaciones no son válidas." };
+  const supabase = await createServerSupabaseClient(); if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
+  const { data, error } = await supabase.rpc("update_order_notes", { p_order_id: orderId, p_notes: notes });
+  if (error) return { ok: false, message: "No se han podido actualizar las observaciones del pedido." };
+  revalidatePath("/"); return { ok: true, id: data, message: "Observaciones del pedido actualizadas." };
+}
+
 export async function getOrderHistory(orderId: string): Promise<{ ok: true; events: { id: string; type: string; createdAt: string; payload: Record<string, unknown> }[] } | { ok: false; message: string }> {
   const supabase = await createServerSupabaseClient();
   if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
