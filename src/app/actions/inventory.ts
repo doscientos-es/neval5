@@ -33,3 +33,11 @@ export async function createPurchaseOrder(formData: FormData): Promise<{ ok: boo
   if (error) return { ok: false, message: "No se ha podido crear el pedido de compra." };
   revalidatePath("/"); return { ok: true, message: "Pedido de compra creado." };
 }
+
+export async function receivePurchaseOrder(purchaseOrderId: string, lineId: string, quantity: number): Promise<{ ok: boolean; message: string }> {
+  if (!Number.isFinite(quantity) || quantity <= 0) return { ok: false, message: "Indica una cantidad válida." };
+  const supabase = await createServerSupabaseClient(); if (!supabase) return { ok: false, message: "La conexión segura no está disponible." };
+  const { error } = await supabase.rpc("receive_purchase_order", { p_purchase_order_id: purchaseOrderId, p_idempotency_key: crypto.randomUUID(), p_lines: [{ purchase_order_line_id: lineId, quantity }] });
+  if (error) return { ok: false, message: "No se ha podido registrar la recepción." };
+  revalidatePath("/"); return { ok: true, message: "Recepción registrada y stock actualizado." };
+}
