@@ -20,7 +20,10 @@ export async function getConfigurationData(): Promise<ConfigurationData | null> 
   if (organizationError || membersError || !organization) throw new Error("No se ha podido cargar la configuración.");
   return {
     organization: { id: organization.id, name: organization.name, taxId: organization.tax_id || "", timezone: organization.timezone, currency: organization.currency },
-    members: memberships.map((member) => ({ id: member.user_id, name: member.profiles?.[0]?.full_name || "Usuario", role: member.role, isSalesRep: member.profiles?.[0]?.is_sales_rep ?? false })),
+    members: memberships.map((member) => {
+      const profile = (Array.isArray(member.profiles) ? member.profiles[0] : member.profiles) as { full_name: string; is_sales_rep: boolean } | null;
+      return { id: member.user_id, name: profile?.full_name || "Usuario", role: member.role, isSalesRep: profile?.is_sales_rep ?? false };
+    }),
     canAdminister: mine.role === "administrator",
   };
 }
