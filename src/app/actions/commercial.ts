@@ -24,6 +24,16 @@ export async function createQuote(formData: FormData): Promise<Result> {
   return { ok: true, id: data, message: "Presupuesto creado correctamente." };
 }
 
+export async function createManualOrder(formData: FormData): Promise<Result> {
+  const parsed = quoteSchema.safeParse({ customerId: formData.get("customerId"), notes: formData.get("notes") || undefined, globalDiscount: 0, description: formData.get("description"), quantity: formData.get("quantity"), unit: formData.get("unit") || "ud", unitPrice: formData.get("unitPrice"), lineDiscount: formData.get("lineDiscount") || 0, taxRate: formData.get("taxRate") || 21, productId: formData.get("productId") || undefined });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa el pedido." };
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
+  const { data, error } = await supabase.rpc("create_order", { p_customer_id: parsed.data.customerId, p_notes: parsed.data.notes || null, p_lines: [{ product_id: parsed.data.productId || null, description: parsed.data.description, quantity: parsed.data.quantity, unit: parsed.data.unit, unit_price: parsed.data.unitPrice, discount_pct: parsed.data.lineDiscount, tax_rate: parsed.data.taxRate }] });
+  if (error) return { ok: false, message: "No se ha podido crear el pedido." };
+  revalidatePath("/"); return { ok: true, id: data, message: "Pedido creado correctamente." };
+}
+
 export async function convertQuote(quoteId: string): Promise<Result> {
   const supabase = await createServerSupabaseClient();
   if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
