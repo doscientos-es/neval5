@@ -6,6 +6,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const organizationSchema = z.object({ name: z.string().trim().min(2).max(160), taxId: z.string().trim().max(40).optional(), timezone: z.literal("Europe/Madrid"), currency: z.literal("EUR") });
 const memberSchema = z.object({ userId: z.string().uuid(), role: z.enum(["administrator", "administrative", "production", "cutter", "cnc_operator"]), isSalesRep: z.boolean() });
+const inviteSchema = z.object({ email: z.string().trim().email().max(254), fullName: z.string().trim().min(2).max(160), role: z.enum(["administrator", "administrative", "production", "cutter", "cnc_operator"]), isSalesRep: z.boolean() });
 
 async function adminContext() {
   const supabase = await createServerSupabaseClient();
@@ -35,4 +36,14 @@ export async function updateMember(formData: FormData): Promise<{ ok: boolean; m
   const { error: profileError } = await context.supabase.from("profiles").update({ is_sales_rep: parsed.data.isSalesRep }).eq("id", parsed.data.userId);
   if (profileError) return { ok: false, message: "El rol se actualizó, pero no el perfil comercial." };
   revalidatePath("/"); return { ok: true, message: "Permisos de usuario actualizados." };
+}
+
+export async function inviteMember(formData: FormData): Promise<{ ok: boolean; message: string }> {
+  const parsed = inviteSchema.safeParse({ email: formData.get("email"), fullName: formData.get("fullName"), role: formData.get("role"), isSalesRep: formData.get("isSalesRep") === "on" });
+  if (!parsed.success) return { ok: false, message: "Revisa el nombre, correo y rol de la invitación." };
+  const context = await adminContext(); if ("error" in context) return { ok: false, message: context.error ?? "No autorizado." };
+  const { data, error } = await context.supabase.functions.invoke("invite-organization-member", { body: parsed.data });
+  if (error) return { ok: false, message: "No se ha podido enviar la invitación." };
+  if (!data?.ok) return { ok: false, message: typeof data?.error === "string" ? data.error : "No se ha podido enviar la invitación." };
+  revalidatePath("/"); return { ok: true, message: data.message };
 }
