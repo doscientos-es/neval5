@@ -53,6 +53,16 @@ export async function createProduct(formData: FormData): Promise<{ ok: boolean; 
   return { ok: true, message: "Producto guardado correctamente." };
 }
 
+export async function archiveProduct(productId: string): Promise<{ ok: boolean; message: string }> {
+  if (!z.string().uuid().safeParse(productId).success) return { ok: false, message: "El producto no es válido." };
+  const context = await currentOrganization();
+  if ("error" in context) return { ok: false, message: context.error ?? "No se ha podido identificar la empresa." };
+  const { data, error } = await context.supabase.from("products").update({ archived_at: new Date().toISOString() }).eq("id", productId).eq("organization_id", context.organizationId).is("archived_at", null).select("id").maybeSingle();
+  if (error || !data) return { ok: false, message: "No se ha podido archivar el producto." };
+  revalidatePath("/");
+  return { ok: true, message: "Producto archivado. Sus documentos históricos se conservan." };
+}
+
 export async function createProductFamily(formData: FormData): Promise<{ ok: boolean; message: string }> {
   const parsed = familySchema.safeParse({ name: formData.get("name") });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa la familia." };
