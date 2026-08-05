@@ -12,13 +12,16 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   if (!supabase) return Response.json({ error: "Servicio no configurado" }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "No autorizado" }, { status: 401 });
-  const { data: quote, error } = await supabase.from("quotes").select("number, customer_name_snapshot, customer_address_snapshot, notes, subtotal, tax_total, total, created_at, quote_lines(description_snapshot, quantity, unit, unit_price, discount_pct, tax_rate_snapshot, line_total)").eq("id", id).maybeSingle();
+  const { data: quote, error } = await supabase.from("quotes").select("organization_id, number, customer_name_snapshot, customer_address_snapshot, company_name_snapshot, company_tax_id_snapshot, company_address_snapshot, company_email_snapshot, company_phone_snapshot, notes, subtotal, tax_total, total, created_at, quote_lines(description_snapshot, quantity, unit, unit_price, discount_pct, tax_rate_snapshot, line_total)").eq("id", id).maybeSingle();
   if (error || !quote) return Response.json({ error: "Presupuesto no encontrado" }, { status: 404 });
+  const { data: organization } = await supabase.from("organizations").select("name, tax_id, address, city, province, email, phone").eq("id", quote.organization_id).maybeSingle();
+  const company = { name: quote.company_name_snapshot || organization?.name || "NEVAL 5", taxId: quote.company_tax_id_snapshot || organization?.tax_id || "", address: quote.company_address_snapshot || [organization?.address, organization?.city, organization?.province].filter(Boolean).join(", "), email: quote.company_email_snapshot || organization?.email || "", phone: quote.company_phone_snapshot || organization?.phone || "" };
 
   const pdf = new PDFDocument({ size: "A4", margin: 48, info: { Title: quote.number, Author: "NEVAL 5" } });
   const chunks: Buffer[] = []; pdf.on("data", (chunk: Buffer) => chunks.push(chunk));
   const finished = new Promise<Buffer>((resolve, reject) => { pdf.on("end", () => resolve(Buffer.concat(chunks))); pdf.on("error", reject); });
-  pdf.fillColor("#2a4227").fontSize(25).font("Helvetica-Bold").text("NEVAL 5");
+  pdf.fillColor("#2a4227").fontSize(25).font("Helvetica-Bold").text(company.name);
+  pdf.fillColor("#667066").fontSize(8).font("Helvetica").text([company.taxId, company.address, company.email, company.phone].filter(Boolean).join(" · "), { width: 270 });
   pdf.fillColor("#171717").fontSize(10).font("Helvetica").text("Presupuesto", { align: "right" });
   pdf.font("Helvetica-Bold").fontSize(16).text(quote.number, { align: "right" });
   pdf.moveDown(3).fillColor("#2a4227").font("Helvetica-Bold").fontSize(10).text("CLIENTE");
@@ -31,7 +34,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const totals = [["Base imponible", quote.subtotal], ["IVA", quote.tax_total], ["TOTAL", quote.total]] as const;
   totals.forEach(([label, amount], index) => { pdf.fillColor(index === 2 ? "#2a4227" : "#171717").font(index === 2 ? "Helvetica-Bold" : "Helvetica").fontSize(index === 2 ? 13 : 10).text(label, 365, pdf.y, { width: 90, align: "right" }).text(euro(Number(amount)), 470, pdf.y - (index === 2 ? 15 : 12), { width: 77, align: "right" }); pdf.moveDown(.8); });
   if (quote.notes) { pdf.moveDown(2).fillColor("#2a4227").font("Helvetica-Bold").fontSize(10).text("OBSERVACIONES"); pdf.fillColor("#171717").font("Helvetica").fontSize(9).text(quote.notes); }
-  pdf.fillColor("#667066").fontSize(8).text("Documento generado por NEVAL 5", 48, 780, { align: "center", width: 499 }); pdf.end();
+  pdf.fillColor("#667066").fontSize(8).text(`Documento generado por ${company.name}`, 48, 780, { align: "center", width: 499 }); pdf.end();
   const body = await finished;
   return new Response(new Uint8Array(body), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${quote.number}.pdf"`, "Cache-Control": "no-store" } });
 }

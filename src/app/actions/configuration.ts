@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-const organizationSchema = z.object({ name: z.string().trim().min(2).max(160), taxId: z.string().trim().max(40).optional(), timezone: z.literal("Europe/Madrid"), currency: z.literal("EUR") });
+const organizationSchema = z.object({ name: z.string().trim().min(2).max(160), taxId: z.string().trim().max(40).optional(), address: z.string().trim().max(240).optional(), city: z.string().trim().max(120).optional(), province: z.string().trim().max(120).optional(), email: z.string().trim().email().max(254).optional().or(z.literal("")), phone: z.string().trim().max(40).optional(), timezone: z.literal("Europe/Madrid"), currency: z.literal("EUR") });
 const memberSchema = z.object({ userId: z.string().uuid(), role: z.enum(["administrator", "administrative", "production", "cutter", "cnc_operator"]), isSalesRep: z.boolean() });
 const inviteSchema = z.object({ email: z.string().trim().email().max(254), fullName: z.string().trim().min(2).max(160), role: z.enum(["administrator", "administrative", "production", "cutter", "cnc_operator"]), isSalesRep: z.boolean() });
 
@@ -19,10 +19,10 @@ async function adminContext() {
 }
 
 export async function updateOrganization(formData: FormData): Promise<{ ok: boolean; message: string }> {
-  const parsed = organizationSchema.safeParse({ name: formData.get("name"), taxId: formData.get("taxId") || undefined, timezone: formData.get("timezone"), currency: formData.get("currency") });
+  const parsed = organizationSchema.safeParse({ name: formData.get("name"), taxId: formData.get("taxId") || undefined, address: formData.get("address") || undefined, city: formData.get("city") || undefined, province: formData.get("province") || undefined, email: formData.get("email") || undefined, phone: formData.get("phone") || undefined, timezone: formData.get("timezone"), currency: formData.get("currency") });
   if (!parsed.success) return { ok: false, message: "Revisa los datos de empresa." };
   const context = await adminContext(); if ("error" in context) return { ok: false, message: context.error ?? "No autorizado." };
-  const { error } = await context.supabase.from("organizations").update({ name: parsed.data.name, tax_id: parsed.data.taxId || null, timezone: parsed.data.timezone, currency: parsed.data.currency }).eq("id", context.organizationId);
+  const { error } = await context.supabase.from("organizations").update({ name: parsed.data.name, tax_id: parsed.data.taxId || null, address: parsed.data.address || null, city: parsed.data.city || null, province: parsed.data.province || null, email: parsed.data.email || null, phone: parsed.data.phone || null, timezone: parsed.data.timezone, currency: parsed.data.currency }).eq("id", context.organizationId);
   if (error) return { ok: false, message: "No se han podido guardar los datos de empresa." };
   revalidatePath("/"); return { ok: true, message: "Datos de empresa actualizados." };
 }

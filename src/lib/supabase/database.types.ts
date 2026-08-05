@@ -516,26 +516,41 @@ export type Database = {
       }
       organizations: {
         Row: {
+          address: string | null
+          city: string | null
           created_at: string
           currency: string
+          email: string | null
           id: string
           name: string
+          phone: string | null
+          province: string | null
           tax_id: string | null
           timezone: string
         }
         Insert: {
+          address?: string | null
+          city?: string | null
           created_at?: string
           currency?: string
+          email?: string | null
           id?: string
           name: string
+          phone?: string | null
+          province?: string | null
           tax_id?: string | null
           timezone?: string
         }
         Update: {
+          address?: string | null
+          city?: string | null
           created_at?: string
           currency?: string
+          email?: string | null
           id?: string
           name?: string
+          phone?: string | null
+          province?: string | null
           tax_id?: string | null
           timezone?: string
         }
@@ -960,6 +975,11 @@ export type Database = {
       }
       quotes: {
         Row: {
+          company_address_snapshot: string | null
+          company_email_snapshot: string | null
+          company_name_snapshot: string | null
+          company_phone_snapshot: string | null
+          company_tax_id_snapshot: string | null
           created_at: string
           created_by: string | null
           customer_address_snapshot: string | null
@@ -977,6 +997,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          company_address_snapshot?: string | null
+          company_email_snapshot?: string | null
+          company_name_snapshot?: string | null
+          company_phone_snapshot?: string | null
+          company_tax_id_snapshot?: string | null
           created_at?: string
           created_by?: string | null
           customer_address_snapshot?: string | null
@@ -994,6 +1019,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          company_address_snapshot?: string | null
+          company_email_snapshot?: string | null
+          company_name_snapshot?: string | null
+          company_phone_snapshot?: string | null
+          company_tax_id_snapshot?: string | null
           created_at?: string
           created_by?: string | null
           customer_address_snapshot?: string | null
