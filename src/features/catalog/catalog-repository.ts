@@ -9,6 +9,8 @@ export type CatalogProduct = {
   trackStock: boolean;
   stockUnit: string;
   minimumStock: string;
+  familyId: string | null;
+  taxRateId: string | null;
   familyName: string;
   taxName: string;
 };
@@ -27,7 +29,7 @@ export async function getCatalogData(): Promise<CatalogData | null> {
   if (!user) return null;
 
   const [productsResult, familiesResult, taxesResult, priceListsResult] = await Promise.all([
-    supabase.from("products").select("id, code, name, description, base_price, track_stock, stock_unit, minimum_stock, product_families(name), tax_rates(name)").is("archived_at", null).order("name"),
+    supabase.from("products").select("id, code, name, description, base_price, track_stock, stock_unit, minimum_stock, family_id, default_tax_rate_id, product_families(name), tax_rates(name)").is("archived_at", null).order("name"),
     supabase.from("product_families").select("id, name").is("archived_at", null).order("name"),
     supabase.from("tax_rates").select("id, name, rate, is_default").order("rate"),
     supabase.from("price_lists").select("id, name, price_list_items(count)").is("archived_at", null).order("name"),
@@ -39,6 +41,7 @@ export async function getCatalogData(): Promise<CatalogData | null> {
       id: product.id, code: product.code, name: product.name, description: product.description || "",
       basePrice: Number(product.base_price).toFixed(2), trackStock: product.track_stock,
       stockUnit: product.stock_unit, minimumStock: String(product.minimum_stock),
+      familyId: product.family_id, taxRateId: product.default_tax_rate_id,
       familyName: product.product_families?.[0]?.name || "Sin familia", taxName: product.tax_rates?.[0]?.name || "Sin IVA",
     })),
     families: familiesResult.data,

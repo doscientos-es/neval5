@@ -53,6 +53,29 @@ export async function createProduct(formData: FormData): Promise<{ ok: boolean; 
   return { ok: true, message: "Producto guardado correctamente." };
 }
 
+export async function updateProduct(productId: string, formData: FormData): Promise<{ ok: boolean; message: string }> {
+  if (!z.string().uuid().safeParse(productId).success) return { ok: false, message: "El producto no es válido." };
+  const parsed = productSchema.safeParse({
+    code: formData.get("code"), name: formData.get("name"), description: formData.get("description") || undefined,
+    basePrice: formData.get("basePrice"), trackStock: formData.get("trackStock") === "on",
+    stockUnit: formData.get("stockUnit") || "ud", minimumStock: formData.get("minimumStock") || 0,
+    familyId: formData.get("familyId") || undefined, taxRateId: formData.get("taxRateId") || undefined,
+  });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa los datos del producto." };
+  const context = await currentOrganization();
+  if ("error" in context) return { ok: false, message: context.error ?? "No se ha podido identificar la empresa." };
+  const { data, error } = await context.supabase.from("products").update({
+    code: parsed.data.code, name: parsed.data.name, description: parsed.data.description || null,
+    base_price: parsed.data.basePrice, track_stock: parsed.data.trackStock, stock_unit: parsed.data.stockUnit,
+    minimum_stock: parsed.data.minimumStock, family_id: parsed.data.familyId || null,
+    default_tax_rate_id: parsed.data.taxRateId || null,
+  }).eq("id", productId).eq("organization_id", context.organizationId).is("archived_at", null).select("id").maybeSingle();
+  if (error?.code === "23505") return { ok: false, message: "Ya existe un producto con ese código." };
+  if (error || !data) return { ok: false, message: "No se ha podido actualizar el producto." };
+  revalidatePath("/");
+  return { ok: true, message: "Producto actualizado. Los documentos previos mantienen su fotografía histórica." };
+}
+
 export async function archiveProduct(productId: string): Promise<{ ok: boolean; message: string }> {
   if (!z.string().uuid().safeParse(productId).success) return { ok: false, message: "El producto no es válido." };
   const context = await currentOrganization();
