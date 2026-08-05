@@ -14,7 +14,8 @@ export async function createQuote(formData: FormData): Promise<Result> {
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa el presupuesto." };
   const supabase = await createServerSupabaseClient();
   if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
-  const { data, error } = await supabase.rpc("create_quote", { p_customer_id: parsed.data.customerId, p_notes: parsed.data.notes || null, p_global_discount_pct: parsed.data.globalDiscount, p_lines: parsed.data.lines.map((line) => ({ product_id: line.productId || null, description: line.description, quantity: line.quantity, unit: line.unit, unit_price: line.unitPrice, discount_pct: line.lineDiscount, tax_rate: line.taxRate })) });
+  const lines = await resolveTariffPrices(supabase, parsed.data.customerId, parsed.data.lines);
+  const { data, error } = await supabase.rpc("create_quote", { p_customer_id: parsed.data.customerId, p_notes: parsed.data.notes || null, p_global_discount_pct: parsed.data.globalDiscount, p_lines: lines.map((line) => ({ product_id: line.productId || null, description: line.description, quantity: line.quantity, unit: line.unit, unit_price: line.unitPrice, discount_pct: line.lineDiscount, tax_rate: line.taxRate })) });
   if (error) return { ok: false, message: "No se ha podido crear el presupuesto." };
   revalidatePath("/");
   return { ok: true, id: data, message: "Presupuesto creado correctamente." };
@@ -25,9 +26,20 @@ export async function createManualOrder(formData: FormData): Promise<Result> {
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa el pedido." };
   const supabase = await createServerSupabaseClient();
   if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
-  const { data, error } = await supabase.rpc("create_order", { p_customer_id: parsed.data.customerId, p_notes: parsed.data.notes || null, p_lines: parsed.data.lines.map((line) => ({ product_id: line.productId || null, description: line.description, quantity: line.quantity, unit: line.unit, unit_price: line.unitPrice, discount_pct: line.lineDiscount, tax_rate: line.taxRate })) });
+  const lines = await resolveTariffPrices(supabase, parsed.data.customerId, parsed.data.lines);
+  const { data, error } = await supabase.rpc("create_order", { p_customer_id: parsed.data.customerId, p_notes: parsed.data.notes || null, p_lines: lines.map((line) => ({ product_id: line.productId || null, description: line.description, quantity: line.quantity, unit: line.unit, unit_price: line.unitPrice, discount_pct: line.lineDiscount, tax_rate: line.taxRate })) });
   if (error) return { ok: false, message: "No se ha podido crear el pedido." };
   revalidatePath("/"); return { ok: true, id: data, message: "Pedido creado correctamente." };
+}
+
+async function resolveTariffPrices(supabase: NonNullable<Awaited<ReturnType<typeof createServerSupabaseClient>>>, customerId: string, lines: z.infer<typeof lineSchema>[]) {
+  const { data: customer } = await supabase.from("customers").select("price_list_id").eq("id", customerId).maybeSingle();
+  if (!customer?.price_list_id) return lines;
+  const productIds = lines.flatMap((line) => line.productId ? [line.productId] : []);
+  if (!productIds.length) return lines;
+  const { data: prices } = await supabase.from("price_list_items").select("product_id, unit_price").eq("price_list_id", customer.price_list_id).in("product_id", productIds);
+  const mapped = new Map(prices?.map((price) => [price.product_id, Number(price.unit_price)]) ?? []);
+  return lines.map((line) => line.productId && mapped.has(line.productId) ? { ...line, unitPrice: mapped.get(line.productId)! } : line);
 }
 
 function parseDocument(formData: FormData, includeDiscount: boolean) {

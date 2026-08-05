@@ -2,6 +2,20 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const allowed = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
 
+export async function GET(request: Request) {
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return Response.json({ error: "Servicio no configurado" }, { status: 503 });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return Response.json({ error: "No autorizado" }, { status: 401 });
+  const { searchParams } = new URL(request.url); const customerId = searchParams.get("customerId"); const orderId = searchParams.get("orderId");
+  if ((Boolean(customerId)) === (Boolean(orderId))) return Response.json({ error: "Indica un cliente o un pedido." }, { status: 400 });
+  let query = supabase.from("attachments").select("id, filename, mime_type, byte_size, created_at").order("created_at", { ascending: false });
+  query = customerId ? query.eq("customer_id", customerId) : query.eq("order_id", orderId!);
+  const { data, error } = await query;
+  if (error) return Response.json({ error: "No se han podido cargar los adjuntos." }, { status: 400 });
+  return Response.json({ files: data });
+}
+
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
   if (!supabase) return Response.json({ error: "Servicio no configurado" }, { status: 503 });

@@ -12,6 +12,7 @@ export type CustomerSummary = {
   mobile: string;
   email: string;
   notes: string;
+  priceListId: string;
   total: string;
   orders: number;
 };
@@ -27,6 +28,7 @@ export function toCustomerSummary(customer: {
   mobile: string | null;
   email: string | null;
   notes: string | null;
+  price_list_id?: string | null;
 }): CustomerSummary {
   return {
     id: customer.id,
@@ -40,6 +42,7 @@ export function toCustomerSummary(customer: {
     mobile: customer.mobile || "",
     email: customer.email || "",
     notes: customer.notes || "",
+    priceListId: customer.price_list_id || "",
     total: "—",
     orders: 0,
   };
@@ -54,7 +57,7 @@ export async function listCustomerSummaries(): Promise<CustomerSummary[] | null>
 
   const { data, error } = await supabase
     .from("customers")
-    .select("id, name, company, address, city, province, phone, mobile, email, notes")
+    .select("id, name, company, address, city, province, phone, mobile, email, notes, price_list_id")
     .is("archived_at", null)
     .order("name");
   if (error) throw new Error("No se han podido cargar los clientes.");

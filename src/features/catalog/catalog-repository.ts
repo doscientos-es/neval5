@@ -17,6 +17,7 @@ export type CatalogData = {
   products: CatalogProduct[];
   families: { id: string; name: string }[];
   taxes: { id: string; name: string; rate: string; isDefault: boolean }[];
+  priceLists: { id: string; name: string; itemCount: number }[];
 };
 
 export async function getCatalogData(): Promise<CatalogData | null> {
@@ -25,12 +26,13 @@ export async function getCatalogData(): Promise<CatalogData | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [productsResult, familiesResult, taxesResult] = await Promise.all([
+  const [productsResult, familiesResult, taxesResult, priceListsResult] = await Promise.all([
     supabase.from("products").select("id, code, name, description, base_price, track_stock, stock_unit, minimum_stock, product_families(name), tax_rates(name)").is("archived_at", null).order("name"),
     supabase.from("product_families").select("id, name").is("archived_at", null).order("name"),
     supabase.from("tax_rates").select("id, name, rate, is_default").order("rate"),
+    supabase.from("price_lists").select("id, name, price_list_items(count)").is("archived_at", null).order("name"),
   ]);
-  if (productsResult.error || familiesResult.error || taxesResult.error) throw new Error("No se ha podido cargar el catálogo.");
+  if (productsResult.error || familiesResult.error || taxesResult.error || priceListsResult.error) throw new Error("No se ha podido cargar el catálogo.");
 
   return {
     products: productsResult.data.map((product) => ({
@@ -41,5 +43,6 @@ export async function getCatalogData(): Promise<CatalogData | null> {
     })),
     families: familiesResult.data,
     taxes: taxesResult.data.map((tax) => ({ id: tax.id, name: tax.name, rate: String(tax.rate), isDefault: tax.is_default })),
+    priceLists: priceListsResult.data.map((list) => ({ id: list.id, name: list.name, itemCount: list.price_list_items?.[0]?.count ?? 0 })),
   };
 }

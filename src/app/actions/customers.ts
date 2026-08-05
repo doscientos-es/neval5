@@ -15,6 +15,7 @@ const customerSchema = z.object({
   mobile: z.string().trim().max(40).optional(),
   email: z.string().trim().email("Indica un correo válido.").max(254).optional().or(z.literal("")),
   notes: z.string().trim().max(4000).optional(),
+  priceListId: z.string().uuid().optional().or(z.literal("")),
 });
 
 export type CreateCustomerResult =
@@ -30,6 +31,7 @@ function valuesFrom(formData: FormData) {
     province: formData.get("province") || undefined, phone: formData.get("phone") || undefined,
     mobile: formData.get("mobile") || undefined, email: formData.get("email") || undefined,
     notes: formData.get("notes") || undefined,
+    priceListId: formData.get("priceListId") || "",
   };
 }
 
@@ -38,6 +40,7 @@ function databaseValues(data: z.infer<typeof customerSchema>) {
     name: data.name, company: data.company || null, address: data.address || null,
     city: data.city || null, province: data.province || null, phone: data.phone || null,
     mobile: data.mobile || null, email: data.email || null, notes: data.notes || null,
+    price_list_id: data.priceListId || null,
   };
 }
 
@@ -61,7 +64,7 @@ export async function createCustomer(formData: FormData): Promise<CreateCustomer
   const { data: inserted, error } = await supabase
     .from("customers")
     .insert({ organization_id: membership.organization_id, ...databaseValues(parsed.data) })
-    .select("id, name, company, address, city, province, phone, mobile, email, notes")
+    .select("id, name, company, address, city, province, phone, mobile, email, notes, price_list_id")
     .single();
   if (error) return { ok: false, message: "No se ha podido guardar el cliente." };
 
@@ -80,7 +83,7 @@ export async function updateCustomer(customerId: string, formData: FormData): Pr
     .update(databaseValues(parsed.data))
     .eq("id", customerId)
     .is("archived_at", null)
-    .select("id, name, company, address, city, province, phone, mobile, email, notes")
+    .select("id, name, company, address, city, province, phone, mobile, email, notes, price_list_id")
     .maybeSingle();
   if (error || !data) return { ok: false, message: "No se ha podido actualizar el cliente." };
   revalidatePath("/");

@@ -18,6 +18,8 @@ const productSchema = z.object({
 
 const familySchema = z.object({ name: z.string().trim().min(2, "Indica el nombre de la familia.").max(120) });
 const taxSchema = z.object({ name: z.string().trim().min(2, "Indica el nombre del impuesto.").max(80), rate: z.coerce.number().min(0).max(100), isDefault: z.boolean() });
+const priceListSchema = z.object({ name: z.string().trim().min(2, "Indica el nombre de la tarifa.").max(120) });
+const priceListItemSchema = z.object({ priceListId: z.string().uuid(), productId: z.string().uuid(), unitPrice: z.coerce.number().min(0).max(999999999) });
 
 async function currentOrganization() {
   const supabase = await createServerSupabaseClient();
@@ -73,4 +75,30 @@ export async function createTaxRate(formData: FormData): Promise<{ ok: boolean; 
   if (error?.code === "23505") return { ok: false, message: "Ya existe un IVA con ese nombre." };
   if (error) return { ok: false, message: "No se ha podido guardar el IVA." };
   revalidatePath("/"); return { ok: true, message: "Tipo de IVA creado." };
+}
+
+export async function createPriceList(formData: FormData): Promise<{ ok: boolean; message: string }> {
+  const parsed = priceListSchema.safeParse({ name: formData.get("name") });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa el nombre de la tarifa." };
+  const context = await currentOrganization();
+  if ("error" in context) return { ok: false, message: context.error ?? "No se ha podido identificar la empresa." };
+  const { error } = await context.supabase.from("price_lists").insert({ organization_id: context.organizationId, name: parsed.data.name });
+  if (error?.code === "23505") return { ok: false, message: "Ya existe una tarifa con ese nombre." };
+  if (error) return { ok: false, message: "No se ha podido guardar la tarifa." };
+  revalidatePath("/");
+  return { ok: true, message: "Tarifa creada." };
+}
+
+export async function setPriceListItem(formData: FormData): Promise<{ ok: boolean; message: string }> {
+  const parsed = priceListItemSchema.safeParse({ priceListId: formData.get("priceListId"), productId: formData.get("productId"), unitPrice: formData.get("unitPrice") });
+  if (!parsed.success) return { ok: false, message: "Selecciona una tarifa, un producto y un precio válido." };
+  const context = await currentOrganization();
+  if ("error" in context) return { ok: false, message: context.error ?? "No se ha podido identificar la empresa." };
+  const { data: list } = await context.supabase.from("price_lists").select("id").eq("id", parsed.data.priceListId).eq("organization_id", context.organizationId).maybeSingle();
+  const { data: product } = await context.supabase.from("products").select("id").eq("id", parsed.data.productId).eq("organization_id", context.organizationId).is("archived_at", null).maybeSingle();
+  if (!list || !product) return { ok: false, message: "La tarifa o el producto no pertenecen a tu empresa." };
+  const { error } = await context.supabase.from("price_list_items").upsert({ price_list_id: parsed.data.priceListId, product_id: parsed.data.productId, unit_price: parsed.data.unitPrice });
+  if (error) return { ok: false, message: "No se ha podido guardar el precio específico." };
+  revalidatePath("/");
+  return { ok: true, message: "Precio de tarifa actualizado." };
 }
