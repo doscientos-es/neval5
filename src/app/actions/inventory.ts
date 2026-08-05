@@ -47,9 +47,10 @@ export async function archiveSupplier(supplierId: string): Promise<{ ok: boolean
   revalidatePath("/"); return { ok: true, message: "Proveedor archivado. Las compras históricas se conservan." };
 }
 
-export async function adjustProductStock(productId: string, quantity: number, reason: string): Promise<{ ok: boolean; message: string }> {
+export async function adjustProductStock(productId: string, quantity: number, reason: string, idempotencyKey: string): Promise<{ ok: boolean; message: string }> {
+  if (!z.string().uuid().safeParse(idempotencyKey).success) return { ok: false, message: "La operación de ajuste no es válida." };
   const supabase = await createServerSupabaseClient(); if (!supabase) return { ok: false, message: "La conexión segura no está disponible." };
-  const { error } = await supabase.rpc("adjust_stock", { p_product_id: productId, p_quantity: quantity, p_reason: reason, p_idempotency_key: crypto.randomUUID() });
+  const { error } = await supabase.rpc("adjust_stock", { p_product_id: productId, p_quantity: quantity, p_reason: reason, p_idempotency_key: idempotencyKey });
   if (error) return { ok: false, message: "No se ha podido ajustar el stock." }; revalidatePath("/"); return { ok: true, message: "Ajuste de stock registrado." };
 }
 
@@ -71,10 +72,10 @@ export async function changePurchaseOrderStatus(purchaseOrderId: string, status:
   revalidatePath("/"); return { ok: true, message: status === "requested" ? "Pedido de compra marcado como solicitado." : "Pedido de compra cancelado." };
 }
 
-export async function receivePurchaseOrder(purchaseOrderId: string, lineId: string, quantity: number): Promise<{ ok: boolean; message: string }> {
-  if (!Number.isFinite(quantity) || quantity <= 0) return { ok: false, message: "Indica una cantidad válida." };
+export async function receivePurchaseOrder(purchaseOrderId: string, lineId: string, quantity: number, idempotencyKey: string): Promise<{ ok: boolean; message: string }> {
+  if (!Number.isFinite(quantity) || quantity <= 0 || !z.string().uuid().safeParse(idempotencyKey).success) return { ok: false, message: "Indica una cantidad válida." };
   const supabase = await createServerSupabaseClient(); if (!supabase) return { ok: false, message: "La conexión segura no está disponible." };
-  const { error } = await supabase.rpc("receive_purchase_order", { p_purchase_order_id: purchaseOrderId, p_idempotency_key: crypto.randomUUID(), p_lines: [{ purchase_order_line_id: lineId, quantity }] });
+  const { error } = await supabase.rpc("receive_purchase_order", { p_purchase_order_id: purchaseOrderId, p_idempotency_key: idempotencyKey, p_lines: [{ purchase_order_line_id: lineId, quantity }] });
   if (error) return { ok: false, message: "No se ha podido registrar la recepción." };
   revalidatePath("/"); return { ok: true, message: "Recepción registrada y stock actualizado." };
 }
