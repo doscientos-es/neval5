@@ -26,9 +26,15 @@ export async function createManualOrder(formData: FormData): Promise<Result> {
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa el pedido." };
   const supabase = await createServerSupabaseClient();
   if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
+  const salesRepId = String(formData.get("salesRepId") || "").trim() || null;
+  if (salesRepId && !z.string().uuid().safeParse(salesRepId).success) return { ok: false, message: "El comercial seleccionado no es válido." };
   const lines = await resolveTariffPrices(supabase, parsed.data.customerId, parsed.data.lines);
   const { data, error } = await supabase.rpc("create_order", { p_customer_id: parsed.data.customerId, p_notes: parsed.data.notes || null, p_lines: lines.map((line) => ({ product_id: line.productId || null, description: line.description, quantity: line.quantity, unit: line.unit, unit_price: line.unitPrice, discount_pct: line.lineDiscount, tax_rate: line.taxRate })) });
   if (error) return { ok: false, message: "No se ha podido crear el pedido." };
+  if (salesRepId) {
+    const { error: salesRepError } = await supabase.rpc("assign_order_sales_rep", { p_order_id: data, p_sales_rep_id: salesRepId });
+    if (salesRepError) return { ok: false, message: "El pedido se ha creado, pero no se ha podido asignar el comercial." };
+  }
   revalidatePath("/"); return { ok: true, id: data, message: "Pedido creado correctamente." };
 }
 
