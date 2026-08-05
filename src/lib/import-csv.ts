@@ -1,4 +1,5 @@
 export type ImportRecord = { line: number; [key: string]: string | number };
+type ImportRows = Array<Array<unknown>>;
 
 export function normalizeImportHeader(value: string) {
   return value
@@ -34,11 +35,13 @@ function parseWithDelimiter(text: string, delimiter: string) {
   return rows;
 }
 
-export function readImportCsv(text: string, required: string[], mapping?: Record<string, string>) {
-  const source = text.replace(/^\uFEFF/, "");
-  const firstLine = source.split(/\r?\n/, 1)[0] ?? "";
-  const delimiter = (firstLine.match(/;/g)?.length ?? 0) >= (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
-  const rows = parseWithDelimiter(source, delimiter);
+function cellToText(value: unknown) {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return value == null ? "" : String(value).trim();
+}
+
+export function readImportRows(sourceRows: ImportRows, required: string[], mapping?: Record<string, string>) {
+  const rows = sourceRows.map((row) => row.map(cellToText));
   const header = rows.shift() ?? [];
   const normalized = header.map(normalizeImportHeader);
   const sourceForField = (field: string) => normalizeImportHeader(mapping?.[field] || field);
@@ -46,7 +49,7 @@ export function readImportCsv(text: string, required: string[], mapping?: Record
   const unresolved = required.filter((field) => !normalized.includes(sourceForField(field)));
   if (unresolved.length) return { error: `Faltan columnas requeridas: ${unresolved.join(", ")}.`, headers: header } as const;
 
-  const records = rows.map((row, rowIndex) => {
+  const records = rows.filter((row) => row.some(Boolean)).map((row, rowIndex) => {
     const result: ImportRecord = { line: rowIndex + 2 };
     required.forEach((field) => {
       const columnIndex = normalized.indexOf(sourceForField(field));
@@ -55,6 +58,13 @@ export function readImportCsv(text: string, required: string[], mapping?: Record
     return result;
   });
   return { records, headers: header } as const;
+}
+
+export function readImportCsv(text: string, required: string[], mapping?: Record<string, string>) {
+  const source = text.replace(/^\uFEFF/, "");
+  const firstLine = source.split(/\r?\n/, 1)[0] ?? "";
+  const delimiter = (firstLine.match(/;/g)?.length ?? 0) >= (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
+  return readImportRows(parseWithDelimiter(source, delimiter), required, mapping);
 }
 
 export function parseImportMapping(value: FormDataEntryValue | null): Record<string, string> {

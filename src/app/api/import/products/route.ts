@@ -1,12 +1,13 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { parseImportMapping, readImportCsv } from "@/lib/import-csv";
+import { parseImportMapping } from "@/lib/import-csv";
+import { isSupportedImportFile, readImportFile } from "@/lib/import-file";
 
 const columns = ["codigo", "nombre", "descripcion", "precio_base", "inventariable", "unidad", "stock_minimo"];
 type Row = { line: number; codigo: string; nombre: string; descripcion: string; precio_base: string; inventariable: string; unidad: string; stock_minimo: string };
 type ParsedProducts = { error: string } | { records: Row[]; errors: string[] };
 
-function parse(text: string, mapping?: Record<string, string>): ParsedProducts {
-  const parsed = readImportCsv(text, columns, mapping);
+async function parse(file: File, mapping?: Record<string, string>): Promise<ParsedProducts> {
+  const parsed = await readImportFile(file, columns, mapping);
   if (parsed.error) return { error: parsed.error };
   const records = parsed.records as unknown as Row[];
   const seen = new Set<string>();
@@ -24,8 +25,9 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "No autorizado" }, { status: 401 });
   const form = await request.formData(); const file = form.get("file"); const confirm = form.get("confirm") === "true"; const mapping = parseImportMapping(form.get("mapping"));
-  if (!(file instanceof File) || file.size === 0 || file.size > 20 * 1024 * 1024) return Response.json({ error: "Selecciona un CSV de hasta 20 MB." }, { status: 400 });
-  const parsed = parse(await file.text(), mapping);
+  if (!(file instanceof File) || file.size === 0 || file.size > 20 * 1024 * 1024 || !isSupportedImportFile(file)) return Response.json({ error: "Selecciona un CSV o Excel (.xlsx) de hasta 20 MB." }, { status: 400 });
+  let parsed: ParsedProducts;
+  try { parsed = await parse(file, mapping); } catch { return Response.json({ error: "No se ha podido leer el archivo de Excel." }, { status: 400 }); }
   if ("error" in parsed) return Response.json({ error: parsed.error }, { status: 400 });
   if (parsed.errors.length) return Response.json({ valid: false, errors: parsed.errors, preview: parsed.records.slice(0, 10) }, { status: 422 });
   if (!confirm) return Response.json({ valid: true, total: parsed.records.length, preview: parsed.records.slice(0, 10) });
