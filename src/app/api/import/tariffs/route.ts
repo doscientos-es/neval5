@@ -1,13 +1,14 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { parseImportMapping, readImportCsv } from "@/lib/import-csv";
 
 const required = ["tarifa", "codigo_producto", "precio_unitario"];
 type Row = { line: number; tarifa: string; codigo_producto: string; precio_unitario: string };
+type ParsedTariffs = { error: string } | { records: Row[]; errors: string[] };
 
-function parse(text: string) {
-  const rows = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean).map((line) => line.split(";").map((cell) => cell.trim()));
-  const header = rows.shift()?.map((cell) => cell.toLowerCase()) ?? [];
-  if (required.some((column) => !header.includes(column))) return { error: `Faltan columnas requeridas: ${required.join(", ")}.` } as const;
-  const records = rows.map((row) => Object.fromEntries(header.map((column, i) => [column, row[i] ?? ""])) as Omit<Row, "line">).map((row, i) => ({ ...row, line: i + 2 }));
+function parse(text: string, mapping?: Record<string, string>): ParsedTariffs {
+  const parsed = readImportCsv(text, required, mapping);
+  if (parsed.error) return { error: parsed.error };
+  const records = parsed.records as unknown as Row[];
   const seen = new Set<string>();
   const errors = records.flatMap((row) => { const key = `${row.tarifa.toLowerCase()}|${row.codigo_producto.toLowerCase()}`; const duplicate = seen.has(key); seen.add(key); const price = Number(row.precio_unitario.replace(",", ".")); return [!row.tarifa ? `Fila ${row.line}: la tarifa es obligatoria.` : null, !row.codigo_producto ? `Fila ${row.line}: el código de producto es obligatorio.` : null, !Number.isFinite(price) || price < 0 ? `Fila ${row.line}: el precio no es válido.` : null, duplicate ? `Fila ${row.line}: producto repetido en la tarifa.` : null].filter(Boolean) as string[]; });
   return { records, errors } as const;
@@ -16,9 +17,9 @@ function parse(text: string) {
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient(); if (!supabase) return Response.json({ error: "Servicio no configurado" }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser(); if (!user) return Response.json({ error: "No autorizado" }, { status: 401 });
-  const form = await request.formData(); const file = form.get("file"); const confirm = form.get("confirm") === "true";
+  const form = await request.formData(); const file = form.get("file"); const confirm = form.get("confirm") === "true"; const mapping = parseImportMapping(form.get("mapping"));
   if (!(file instanceof File) || !file.size || file.size > 20 * 1024 * 1024) return Response.json({ error: "Selecciona un CSV de hasta 20 MB." }, { status: 400 });
-  const parsed = parse(await file.text()); if ("error" in parsed) return Response.json({ error: parsed.error }, { status: 400 }); if (parsed.errors.length) return Response.json({ valid: false, errors: parsed.errors, preview: parsed.records.slice(0, 10) }, { status: 422 }); if (!confirm) return Response.json({ valid: true, total: parsed.records.length, preview: parsed.records.slice(0, 10) });
+  const parsed = parse(await file.text(), mapping); if ("error" in parsed) return Response.json({ error: parsed.error }, { status: 400 }); if (parsed.errors.length) return Response.json({ valid: false, errors: parsed.errors, preview: parsed.records.slice(0, 10) }, { status: 422 }); if (!confirm) return Response.json({ valid: true, total: parsed.records.length, preview: parsed.records.slice(0, 10) });
   const { data: membership } = await supabase.from("organization_memberships").select("organization_id").eq("user_id", user.id).limit(1).maybeSingle(); if (!membership) return Response.json({ error: "No perteneces a una empresa." }, { status: 403 });
   const { data: products, error: productError } = await supabase.from("products").select("id, code").eq("organization_id", membership.organization_id).is("archived_at", null); if (productError) return Response.json({ error: "No se ha podido validar el catálogo." }, { status: 400 });
   const productByCode = new Map(products.map((product) => [product.code.toLowerCase(), product.id])); const missing = parsed.records.filter((row) => !productByCode.has(row.codigo_producto.toLowerCase())); if (missing.length) return Response.json({ valid: false, errors: missing.map((row) => `Fila ${row.line}: no existe el producto ${row.codigo_producto}.`) }, { status: 422 });

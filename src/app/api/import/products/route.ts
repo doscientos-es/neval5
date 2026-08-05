@@ -1,13 +1,14 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { parseImportMapping, readImportCsv } from "@/lib/import-csv";
 
 const columns = ["codigo", "nombre", "descripcion", "precio_base", "inventariable", "unidad", "stock_minimo"];
 type Row = { line: number; codigo: string; nombre: string; descripcion: string; precio_base: string; inventariable: string; unidad: string; stock_minimo: string };
+type ParsedProducts = { error: string } | { records: Row[]; errors: string[] };
 
-function parse(text: string) {
-  const rows = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean).map((line) => line.split(";").map((cell) => cell.trim()));
-  const header = rows.shift()?.map((cell) => cell.toLowerCase()) ?? [];
-  if (columns.some((column) => !header.includes(column))) return { error: `Faltan columnas requeridas: ${columns.join(", ")}.` } as const;
-  const records = rows.map((row) => Object.fromEntries(header.map((column, columnIndex) => [column, row[columnIndex] ?? ""])) as Omit<Row, "line">).map((row, index) => ({ ...row, line: index + 2 }));
+function parse(text: string, mapping?: Record<string, string>): ParsedProducts {
+  const parsed = readImportCsv(text, columns, mapping);
+  if (parsed.error) return { error: parsed.error };
+  const records = parsed.records as unknown as Row[];
   const seen = new Set<string>();
   const errors = records.flatMap((row) => {
     const price = Number(row.precio_base.replace(",", ".")); const minimum = Number(row.stock_minimo.replace(",", ".")); const inventory = row.inventariable.toLowerCase();
@@ -22,9 +23,9 @@ export async function POST(request: Request) {
   if (!supabase) return Response.json({ error: "Servicio no configurado" }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "No autorizado" }, { status: 401 });
-  const form = await request.formData(); const file = form.get("file"); const confirm = form.get("confirm") === "true";
+  const form = await request.formData(); const file = form.get("file"); const confirm = form.get("confirm") === "true"; const mapping = parseImportMapping(form.get("mapping"));
   if (!(file instanceof File) || file.size === 0 || file.size > 20 * 1024 * 1024) return Response.json({ error: "Selecciona un CSV de hasta 20 MB." }, { status: 400 });
-  const parsed = parse(await file.text());
+  const parsed = parse(await file.text(), mapping);
   if ("error" in parsed) return Response.json({ error: parsed.error }, { status: 400 });
   if (parsed.errors.length) return Response.json({ valid: false, errors: parsed.errors, preview: parsed.records.slice(0, 10) }, { status: 422 });
   if (!confirm) return Response.json({ valid: true, total: parsed.records.length, preview: parsed.records.slice(0, 10) });
