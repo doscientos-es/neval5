@@ -68,10 +68,10 @@ export async function changeQuoteStatus(quoteId: string, status: "draft" | "sent
   revalidatePath("/"); return { ok: true, id: data, message: "Estado del presupuesto actualizado." };
 }
 
-export async function changeOrderStatus(orderId: string, status: "pending" | "in_manufacturing" | "ready" | "delivered"): Promise<Result> {
+export async function changeOrderStatus(orderId: string, status: "pending" | "in_manufacturing" | "ready" | "delivered", reason?: string): Promise<Result> {
   const supabase = await createServerSupabaseClient();
   if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
-  const { data, error } = await supabase.rpc("set_order_status", { p_order_id: orderId, p_status: status, p_reason: null });
+  const { data, error } = await supabase.rpc("set_order_status", { p_order_id: orderId, p_status: status, p_reason: reason?.trim() || null });
   if (error) return { ok: false, message: "No se ha podido actualizar el pedido." };
   revalidatePath("/");
   return { ok: true, id: data, message: "Estado del pedido actualizado." };

@@ -4,7 +4,7 @@ const euro = new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR"
 
 export type QuoteSummary = { id: string; number: string; customer: string; status: string; total: string; createdAt: string };
 export type OrderSummary = { id: string; number: string; customer: string; status: string; total: string; createdAt: string; salesRepId: string | null; salesRepName: string | null };
-export type CommercialData = { quotes: QuoteSummary[]; orders: OrderSummary[]; salesReps: { id: string; name: string }[]; canManage: boolean };
+export type CommercialData = { quotes: QuoteSummary[]; orders: OrderSummary[]; salesReps: { id: string; name: string }[]; canManage: boolean; isAdministrator: boolean };
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("es-ES", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
@@ -34,5 +34,6 @@ export async function getCommercialData(): Promise<CommercialData | null> {
       return profile?.is_sales_rep ? [{ id: member.user_id, name: profile.full_name }] : [];
     }),
     canManage: ["administrator", "administrative"].includes(membership.role),
+    isAdministrator: membership.role === "administrator",
   };
 }
