@@ -1241,6 +1241,10 @@ export type Database = {
         }
         Returns: string
       }
+      delete_unused_customer: {
+        Args: { p_customer_id: string }
+        Returns: string
+      }
       duplicate_order: { Args: { p_order_id: string }; Returns: string }
       import_tariff_items: {
         Args: { p_items: Json; p_organization_id: string }

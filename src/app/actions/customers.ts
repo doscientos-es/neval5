@@ -104,3 +104,13 @@ export async function archiveCustomer(customerId: string): Promise<{ ok: true } 
   revalidatePath("/");
   return { ok: true };
 }
+
+export async function deleteCustomerPermanently(customerId: string): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (!z.string().uuid().safeParse(customerId).success) return { ok: false, message: "El cliente no es válido." };
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
+  const { error } = await supabase.rpc("delete_unused_customer", { p_customer_id: customerId });
+  if (error) return { ok: false, message: "Este cliente tiene historial o adjuntos; debe archivarse para conservar la trazabilidad." };
+  revalidatePath("/");
+  return { ok: true };
+}
