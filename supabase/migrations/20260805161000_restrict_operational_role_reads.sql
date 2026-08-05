@@ -22,10 +22,5 @@ create policy "orders insert manage" on public.orders for insert to authenticate
 create policy "orders update manage" on public.orders for update to authenticated using ((select private.can_manage_org(organization_id))) with check ((select private.can_manage_org(organization_id)));
 create policy "orders delete manage" on public.orders for delete to authenticated using ((select private.can_manage_org(organization_id)));
 
-drop policy if exists "stock manage" on public.stock_movements;
-create policy "stock insert manage" on public.stock_movements for insert to authenticated with check ((select private.can_manage_org(organization_id)));
-create policy "stock update manage" on public.stock_movements for update to authenticated using ((select private.can_manage_org(organization_id))) with check ((select private.can_manage_org(organization_id)));
-create policy "stock delete manage" on public.stock_movements for delete to authenticated using ((select private.can_manage_org(organization_id)));
-
 drop policy if exists "tenant reads files" on storage.objects;
 create policy "managers read files" on storage.objects for select to authenticated using (bucket_id = 'neval-files' and (select private.can_manage_org((storage.foldername(name))[1]::uuid)));
