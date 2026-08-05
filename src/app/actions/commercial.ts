@@ -65,3 +65,11 @@ export async function duplicateOrder(orderId: string): Promise<Result> {
   revalidatePath("/");
   return { ok: true, id: data, message: "Pedido duplicado en estado Pendiente." };
 }
+
+export async function getOrderHistory(orderId: string): Promise<{ ok: true; events: { id: string; type: string; createdAt: string; payload: Record<string, unknown> }[] } | { ok: false; message: string }> {
+  const supabase = await createServerSupabaseClient();
+  if (!supabase) return { ok: false, message: "La conexión segura con la base de datos no está disponible." };
+  const { data, error } = await supabase.from("order_events").select("id, event_type, payload, created_at").eq("order_id", orderId).order("created_at", { ascending: false });
+  if (error) return { ok: false, message: "No se ha podido cargar el historial." };
+  return { ok: true, events: data.map((event) => ({ id: event.id, type: event.event_type, payload: event.payload as Record<string, unknown>, createdAt: event.created_at })) };
+}
